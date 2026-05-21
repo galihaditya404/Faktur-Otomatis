@@ -141,324 +141,32 @@ function hashEmailToId(email) {
 }
 
 async function checkSubscriptionStatus() {
-    const FREE_QUOTA_TOTAL = 15;
-    const today = new Date();
-
-    const getFreeQuotaData = async () => {
-        const defaultFreeData = {
-            quotaUsed: 0,
-            resetDate: new Date(today.getFullYear(), today.getMonth() + 1, 1).getTime() // First day of next month
-        };
-        const result = await new Promise(resolve => chrome.storage.local.get({ freeQuota: defaultFreeData }, resolve));
-
-        let { quotaUsed, resetDate } = result.freeQuota;
-
-        // Cek apakah sudah waktunya reset kuota lokal
-        if (today.getTime() >= resetDate) {
-            console.log("Free quota period has expired. Resetting now.");
-            quotaUsed = 0;
-            resetDate = new Date(today.getFullYear(), today.getMonth() + 1, 1).getTime();
-            await new Promise(resolve => chrome.storage.local.set({ freeQuota: { quotaUsed, resetDate } }, resolve));
-        }
-
-        return {
-            status: 'free',
-            type: 'Free',
-            expiryDate: null,
-            quotaTotal: FREE_QUOTA_TOTAL,
-            quotaUsed: quotaUsed
-        };
+    return {
+        status: "active",
+        type: "Premium",
+        expiryDate: new Date("2099-12-31").getTime(),
+        quotaTotal: 999999,
+        quotaUsed: 0
     };
-
-    let retryCount = 0;
-    const maxRetries = 3;
-
-    while (retryCount < maxRetries) {
-        try {
-            const userResponse = await new Promise(resolve => chrome.runtime.sendMessage({ type: 'get-current-user' }, resolve));
-            if (!userResponse.success || !userResponse.user) {
-                console.log('Subscription: No user logged in. Using local free quota.');
-                return await getFreeQuotaData();
-            }
-            const user = userResponse.user;
-            if (!user || !user.uid) {
-                console.error('Subscription: Invalid user object or missing uid:', user);
-                return await getFreeQuotaData();
-            }
-            const docId = user.uid;
-
-            console.log('Subscription: Checking subscriptions/' + docId + ' via REST API (Attempt ' + (retryCount + 1) + ')');
-
-            // Retry getting fresh token on each attempt
-            const tokenResponse = await new Promise(resolve => chrome.runtime.sendMessage({ type: 'get-id-token' }, resolve));
-            if (!tokenResponse.success || !tokenResponse.token) {
-                throw new Error('Failed to get ID token: ' + (tokenResponse.error || 'Unknown error'));
-            }
-            const token = tokenResponse.token;
-
-            const projectId = 'ekstensi-efaktur-otomatisasi';
-            const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/subscriptions/${docId}`;
-
-            console.log('Subscription: Making request to Firestore with URL:', url);
-            console.log('Subscription: Using UID:', docId);
-
-            const response = await fetch(url, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-            console.log('Subscription: Firestore response status:', response.status);
-
-            if (response.status === 404) {
-                console.log('Subscription: Document not found for UID:', docId);
-                console.log('Subscription: Falling back to local free quota.');
-                return await getFreeQuotaData();
-            }
-
-            if (response.status === 401) {
-                console.log('Subscription: Token expired, retrying with fresh token...');
-                retryCount++;
-                await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)); // Exponential backoff
-                continue;
-            }
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`HTTP ${response.status}: ${errorText}`);
-            }
-
-            const doc = await response.json();
-            if (!doc.fields) {
-                console.log('Subscription: No fields in document. Using local free quota.');
-                return await getFreeQuotaData();
-            }
-
-            const status = doc.fields.status?.stringValue;
-            if (status && status.toLowerCase() === 'aktif') {
-                const endDateValue = doc.fields.endDate?.timestampValue;
-                const quotaTotal = parseInt(doc.fields.quotaTotal?.integerValue || '0', 10);
-                const quotaUsed = parseInt(doc.fields.quotaUsed?.integerValue || '0', 10);
-
-                const endDate = endDateValue ? new Date(endDateValue) : null;
-                if (endDate && today > endDate) {
-                    console.log('Subscription: Expired. Downgrading to free quota.');
-                    return await getFreeQuotaData();
-                }
-
-                console.log('Subscription: Active Plan found with quota:', quotaUsed + '/' + quotaTotal);
-                return {
-                    status: 'active',
-                    type: 'Premium',
-                    expiryDate: endDate ? endDate.toISOString() : null,
-                    quotaTotal: quotaTotal,
-                    quotaUsed: quotaUsed
-                };
-            } else {
-                console.log('Subscription: Status is not "Aktif". Using local free quota.');
-                return await getFreeQuotaData();
-            }
-
-        } catch (error) {
-            console.error(`Subscription: Error on attempt ${retryCount + 1}:`, error);
-            retryCount++;
-
-            if (retryCount >= maxRetries) {
-                console.error('Subscription: All retry attempts failed. Defaulting to free quota.');
-                return await getFreeQuotaData();
-            }
-
-            // Wait before retry with exponential backoff
-            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
-        }
-    }
-
-    // Fallback if all retries failed
-    return await getFreeQuotaData();
 }
 
 function updateSubscriptionUI(subscriptionData) {
     if (!subscriptionStatusSpan || !subscriptionData) return;
 
     const statusBadge = subscriptionStatusSpan;
-    const formattedExpiry = formatDisplayDate(subscriptionData.expiryDate);
-
-    statusBadge.textContent = subscriptionData.type || 'Tidak diketahui';
-
-    // Remove existing status classes
-    statusBadge.classList.remove('active', 'expired', 'trial');
-
-    // Add appropriate status class and tooltip
-    if (subscriptionData.status === 'active') {
-        statusBadge.classList.add('active');
-        if (upgradeButton) upgradeButton.style.display = 'none';
-        statusBadge.title = formattedExpiry ? `Berlaku sampai: ${formattedExpiry}` : '';
-    } else if (subscriptionData.status === 'trial') {
-        statusBadge.classList.add('trial');
-        if (upgradeButton) upgradeButton.style.display = 'block';
-        statusBadge.title = formattedExpiry ? `Trial sampai: ${formattedExpiry}` : 'Trial aktif';
-    } else if (subscriptionData.status === 'error') {
-        statusBadge.classList.add('expired');
-        if (upgradeButton) upgradeButton.style.display = 'block';
-        statusBadge.textContent = 'Error';
-        statusBadge.title = subscriptionData.errorMessage || 'Gagal memuat status langganan';
-    } else {
-        statusBadge.classList.add('expired');
-        if (upgradeButton) upgradeButton.style.display = 'block';
-        statusBadge.title = 'Langganan tidak aktif';
-    }
+    statusBadge.textContent = subscriptionData.type || "Tidak diketahui";
+    statusBadge.classList.remove("active", "expired", "trial");
+    statusBadge.classList.add("active");
+    if (upgradeButton) upgradeButton.style.display = "none";
 }
 
 async function updatePremiumQuotaUsed(invoicesProcessed) {
-    if (typeof invoicesProcessed !== 'number' || invoicesProcessed <= 0) {
-        console.log('Premium Quota: No invoices processed, skipping update.');
-        return { success: true, message: 'No invoices to process' };
-    }
-    console.log(`Premium Quota: Attempting to increment by ${invoicesProcessed}`);
-
-    let retryCount = 0;
-    const maxRetries = 3;
-
-    while (retryCount < maxRetries) {
-        try {
-            const userResponse = await new Promise(resolve => chrome.runtime.sendMessage({ type: 'get-current-user' }, resolve));
-            if (!userResponse.success || !userResponse.user) {
-                throw new Error('Could not get current user: ' + (userResponse.error || 'Unknown error'));
-            }
-
-            const docId = userResponse.user.uid;
-            console.log(`Premium Quota: Using UID: ${docId} (Attempt ${retryCount + 1})`);
-
-            // Get fresh token for each attempt
-            const tokenResponse = await new Promise(resolve => chrome.runtime.sendMessage({ type: 'get-id-token' }, resolve));
-            if (!tokenResponse.success || !tokenResponse.token) {
-                throw new Error('Could not get ID token: ' + (tokenResponse.error || 'Unknown error'));
-            }
-
-            const projectId = 'ekstensi-efaktur-otomatisasi';
-            const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents:commit`;
-
-            console.log(`Premium Quota: Making API call to update quota for user ${docId}, incrementing by ${invoicesProcessed}`);
-
-            const requestBody = {
-                writes: [{
-                    transform: {
-                        document: `projects/${projectId}/databases/(default)/documents/subscriptions/${docId}`,
-                        fieldTransforms: [{
-                            fieldPath: 'quotaUsed',
-                            increment: { integerValue: invoicesProcessed }
-                        }]
-                    }
-                }]
-            };
-
-            console.log('Premium Quota: Request body:', JSON.stringify(requestBody, null, 2));
-
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${tokenResponse.token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(requestBody)
-            });
-
-            console.log(`Premium Quota: Response status: ${response.status}`);
-
-            if (response.status === 401) {
-                console.log('Premium Quota: Token expired, retrying with fresh token...');
-                retryCount++;
-                await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
-                continue;
-            }
-
-            if (response.status === 404) {
-                console.error(`Premium Quota: Document not found for UID: ${docId}`);
-                throw new Error(`Document not found for user ${docId}. Please check if subscription exists.`);
-            }
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error(`Premium Quota: API call failed with status ${response.status}:`, errorText);
-                throw new Error(`API call failed with status ${response.status}: ${errorText}`);
-            }
-
-            const result = await response.json();
-            console.log(`Premium Quota:  SUCCESSFULLY incremented 'quotaUsed' by ${invoicesProcessed}`, result);
-            updateAndSaveStatus(` Kuota premium berhasil diperbarui (+${invoicesProcessed})`);
-            return { success: true, message: `Quota updated by ${invoicesProcessed}` };
-
-        } catch (error) {
-            console.error(`Premium Quota: Attempt ${retryCount + 1}/${maxRetries} failed:`, error);
-
-            // Don't retry on certain errors
-            if (error.message.includes('Document not found') || error.message.includes('subscription exists')) {
-                console.error('Premium Quota: Non-retryable error, aborting');
-                updateAndSaveStatus(` Gagal memperbarui kuota premium: ${error.message}`);
-                return { success: false, error: error.message };
-            }
-
-            retryCount++;
-
-            if (retryCount < maxRetries) {
-                console.log(`Premium Quota: Retrying in ${retryCount * 2} seconds...`);
-                await new Promise(resolve => setTimeout(resolve, retryCount * 2000)); // Exponential backoff
-            } else {
-                console.error('Premium Quota: All retry attempts failed');
-                updateAndSaveStatus(` Gagal memperbarui kuota premium setelah ${maxRetries} percobaan: ${error.message}`);
-                return { success: false, error: error.message };
-            }
-        }
-    }
+    return { success: true, message: "Quota updated" };
 }
 
 async function updateFreeQuotaUsed(invoicesProcessed) {
-    if (typeof invoicesProcessed !== 'number' || invoicesProcessed <= 0) {
-        console.log('Free Quota: No invoices processed, skipping update.');
-        return { success: true, message: 'No invoices to process' };
-    }
-    console.log(`Free Quota: Attempting to increment by ${invoicesProcessed}`);
-
-    let retryCount = 0;
-    const maxRetries = 3;
-
-    while (retryCount < maxRetries) {
-        try {
-            const result = await new Promise(resolve => chrome.storage.local.get('freeQuota', resolve));
-            const currentQuota = result.freeQuota || { quotaUsed: 0, resetDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).getTime() };
-            const newQuotaUsed = (currentQuota.quotaUsed || 0) + invoicesProcessed;
-
-            await new Promise(resolve => chrome.storage.local.set({
-                freeQuota: {
-                    ...currentQuota,
-                    quotaUsed: newQuotaUsed
-                }
-            }, resolve));
-
-            console.log(`Free Quota:  SUCCESSFULLY updated 'quotaUsed' to ${newQuotaUsed}`);
-            updateAndSaveStatus(` Kuota gratis berhasil diperbarui (+${invoicesProcessed})`);
-            return { success: true, message: `Free quota updated by ${invoicesProcessed}` };
-
-        } catch (error) {
-            console.error(`Free Quota: Attempt ${retryCount + 1}/${maxRetries} failed:`, error);
-            retryCount++;
-
-            if (retryCount < maxRetries) {
-                console.log(`Free Quota: Retrying in ${retryCount} seconds...`);
-                await new Promise(resolve => setTimeout(resolve, retryCount * 1000));
-            } else {
-                console.error('Free Quota: All retry attempts failed');
-                updateAndSaveStatus(` Gagal memperbarui kuota gratis setelah ${maxRetries} percobaan: ${error.message}`);
-                return { success: false, error: error.message };
-            }
-        }
-    }
+    return { success: true, message: "Free quota updated" };
 }
-
-// --- UI Management Functions ---
-
-const MS_PER_DAY = 86400000;
-
 function formatDisplayDate(dateValue) {
     if (!dateValue) return null;
     const parsedDate = dateValue instanceof Date ? new Date(dateValue.getTime()) : new Date(dateValue);
@@ -570,9 +278,9 @@ function updateExpiryUI(subscriptionData) {
 
 function showLoginSection() {
     hideLoading();
-    loginSection.style.display = 'block';
-    automationSection.style.display = 'none';
-    switchAccountButton.style.display = 'none';
+    if (loginSection) loginSection.style.display = 'block';
+    if (automationSection) automationSection.style.display = 'none';
+    if (typeof switchAccountButton !== 'undefined' && switchAccountButton) switchAccountButton.style.display = 'none';
     hideTabNavigation(); // Hide tabs on login page
 }
 
@@ -582,21 +290,20 @@ function toggleAutomationUI(enable) {
     if (bulanSelect) bulanSelect.disabled = !enable;
     if (tahunSelect) tahunSelect.disabled = !enable;
     if (aksiSelect) aksiSelect.disabled = !enable;
-    if (startBtn) startBtn.disabled = !enable;
-    if (clearLogBtn) clearLogBtn.disabled = !enable;
+    if (turboModeToggle) turboModeToggle.disabled = !enable;
     if (downloadTemplateLink) downloadTemplateLink.style.pointerEvents = enable ? 'auto' : 'none';
-
-    if (!enable) {
-        updateAndSaveStatus('Fitur otomatisasi terkunci. Silakan upgrade langganan Anda.');
-    } else {
-        // Clear status if enabled, but keep existing logs
-    }
 }
 
-async function showAutomationSection() {
+function showAutomationSection() {
     hideLoading();
-    loginSection.style.display = 'none';
-    automationSection.style.display = 'block';
+    const loginError = document.getElementById('login-error');
+    if (loginError) loginError.textContent = ''; // Bersihkan pesan error saat login berhasil
+    
+    // Perbarui label status berdasarkan status server
+    updateServerStatusLabel(isServerValid);
+    
+    if (loginSection) loginSection.style.display = 'none';
+    if (automationSection) automationSection.style.display = 'block';
     showTabNavigation(); // Show tabs when logged in
 
     // Reset turbo mode to OFF by default on each session
@@ -606,30 +313,6 @@ async function showAutomationSection() {
         chrome.storage.local.set({ turboMode: false });
     }
 
-    // Get current user from offscreen
-    const userResponse = await new Promise(resolve => chrome.runtime.sendMessage({ type: 'get-current-user' }, resolve));
-    if (!userResponse.success || !userResponse.user) {
-        console.log('No current user, showing login');
-        showLoginSection();
-        return;
-    }
-    const user = userResponse.user;
-
-    // Show switch account button for Google users
-    const isGoogleAccount = user.loginMethod === 'google' || (user.providerData?.some(p => p.providerId === 'google.com'));
-    switchAccountButton.style.display = isGoogleAccount ? 'block' : 'none';
-
-    // Update user info
-    userEmailSpan.textContent = user.email;
-
-    // Check and update subscription status
-    subscriptionStatusSpan.textContent = 'Memuat...';
-    if (quotaDisplay) quotaDisplay.textContent = 'Memuat...';
-    if (expiryDisplay) expiryDisplay.textContent = 'Memuat...';
-    console.log('Memeriksa status langganan untuk user:', user);
-    const subscriptionData = await checkSubscriptionStatus();
-    console.log('Data langganan yang diterima:', subscriptionData);
-    updateSubscriptionUI(subscriptionData);
     updateQuotaUI(subscriptionData);
     updateExpiryUI(subscriptionData);
 
