@@ -116,4 +116,4 @@ Keamanan data adalah prioritas utama kami. Berikut adalah detail implementasi ke
 -   **Firebase**: Digunakan untuk backend autentikasi dan manajemen user.
 
 ---
-*Dibuat dengan ❤️ untuk mempermudah pekerjaan perpajakan Anda.*
+*Dibuat Galih Boss Joko untuk mempermudah ACD.*
