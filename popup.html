@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-Faktur Otomatis</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-layout">
+        <header class="app-header">
+            <div class="brand">
+                <img src="images/logo.png" alt="Logo" class="brand-logo">
+                <div>
+                    <h1 class="brand-title">Faktur<br>Otomatis</h1>
+                    <div class="brand-subtitle"><span id="version-badge" class="version-badge">v1.0</span> <span>Digdaya Inc.</span></div>
+                </div>
+            </div>
+            <button id="theme-toggle" class="icon-btn" title="Toggle Theme">
+                <svg width="20" height="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+                </svg>
+            </button>
+        </header>
+
+        <main class="app-main" id="automation-section">
+            <!-- TAB 1: Otomatisasi -->
+            <div id="tab-content-1" class="tab-content active">
+                <div class="section-title">Preparation</div>
+                <div class="clean-card preflight-checklist" id="preflight-checklist">
+                    <div class="preflight-items">
+                        <label class="preflight-item">
+                            <input type="checkbox" class="preflight-check">
+                            <span>Coretax terbuka di browser</span>
+                        </label>
+                        <label class="preflight-item">
+                            <input type="checkbox" class="preflight-check">
+                            <span>Menu <strong>Faktur Pajak › Pajak Masukan</strong></span>
+                        </label>
+                        <label class="preflight-item">
+                            <input type="checkbox" class="preflight-check">
+                            <span>Tidak ada filter Status aktif</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="section-title">Data Source</div>
+                <div class="form-group">
+                    <div class="file-input-display">
+                        <input type="file" id="csv-file-input" accept=".csv,.txt">
+                        <span id="file-name" class="file-name">Upload File CSV / TXT</span>
+                    </div>
+                    <a href="#" id="download-template-link" class="template-link">
+                        <svg width="14" height="14" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Get Template
+                    </a>
+                </div>
+
+                <div class="section-title">Configuration</div>
+                <div class="form-group">
+                    <label for="bulan-select">Target Masa Pajak</label>
+                    <div class="select-wrapper">
+                        <select id="bulan-select">
+                            <option value="">Pilih Bulan</option>
+                            <option value="Januari">Januari</option>
+                            <option value="Februari">Februari</option>
+                            <option value="Maret">Maret</option>
+                            <option value="April">April</option>
+                            <option value="Mei">Mei</option>
+                            <option value="Juni">Juni</option>
+                            <option value="Juli">Juli</option>
+                            <option value="Agustus">Agustus</option>
+                            <option value="September">September</option>
+                            <option value="Oktober">Oktober</option>
+                            <option value="November">November</option>
+                            <option value="Desember">Desember</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="tahun-select">Target Tahun</label>
+                    <div class="select-wrapper">
+                        <select id="tahun-select">
+                            <option value="">Pilih Tahun</option>
+                            <option value="2025">2025</option>
+                            <option value="2026">2026</option>
+                            <option value="2027">2027</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="aksi-select">Final Action</label>
+                    <div class="select-wrapper">
+                        <select id="aksi-select">
+                            <option value="">Pilih Aksi</option>
+                            <option value="Kreditkan">Kreditkan</option>
+                            <option value="Tidak Dikreditkan">Tidak Dikreditkan</option>
+                            <option value="Tandai sebagai Tidak Valid">Tandai sebagai Tidak Valid</option>
+                            <option value="Kembali ke status Approved">Kembali ke status Approved</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="turbo-toggle-group">
+                    <label class="turbo-toggle-label">
+                        Mode Turbo <span class="turbo-beta-badge">BETA</span>
+                        <div class="turbo-switch">
+                            <input type="checkbox" id="turbo-mode-toggle">
+                            <span class="turbo-slider"></span>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="flex-group">
+                    <button id="start-btn" class="primary-action">Jalankan Otomatisasi</button>
+                    <button id="stop-btn" class="primary-action hidden">Hentikan</button>
+                </div>
+
+                <div id="status-log">Menunggu perintah...</div>
+                
+                <div class="watermark-boss-joko">CRAFT BY BOSS JOKO</div>
+            </div>
+            
+            <!-- TAB 2: Fitur Tools -->
+            <div id="tab-content-2" class="tab-content">
+                <div id="tools-menu-view">
+                    <div class="section-title">Keluaran (Out)</div>
+                    <div class="tool-group">
+                        <div class="tool-item-header" data-navigate="pdf-download">
+                            <div class="tool-item-icon">📄</div>
+                            <div>
+                                <div class="tool-item-title">PDF Keluaran</div>
+                                <div class="tool-item-desc">Unduh berkas PDF Pajak Keluaran</div>
+                            </div>
+                        </div>
+                        <div class="tool-item-header" data-navigate="download-keluaran">
+                            <div class="tool-item-icon">📊</div>
+                            <div>
+                                <div class="tool-item-title">Excel Keluaran</div>
+                                <div class="tool-item-desc">Unduh rekap daftar Excel</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section-title">Masukan (In)</div>
+                    <div class="tool-group">
+                        <div class="tool-item-header" data-navigate="pdf-masukan-download">
+                            <div class="tool-item-icon">📄</div>
+                            <div>
+                                <div class="tool-item-title">PDF Masukan</div>
+                                <div class="tool-item-desc">Unduh berkas PDF Pajak Masukan</div>
+                            </div>
+                        </div>
+                        <div class="tool-item-header" data-navigate="download-masukan">
+                            <div class="tool-item-icon">📥</div>
+                            <div>
+                                <div class="tool-item-title">Excel Masukan</div>
+                                <div class="tool-item-desc">Unduh rekap daftar Excel</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section-title">Utilities</div>
+                    <div class="tool-group">
+                        <div class="tool-item-header" data-navigate="merge-excel">
+                            <div class="tool-item-icon">📚</div>
+                            <div>
+                                <div class="tool-item-title">Gabung Excel</div>
+                                <div class="tool-item-desc">Satukan beberapa sheet Excel</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Subviews (hidden by default) -->
+                <!-- PDF Keluaran -->
+                <div id="tool-subview-pdf-download" class="hidden">
+                    <button class="back-btn" id="back-from-pdf">← Kembali</button>
+                    <div class="subview-title"><h2>PDF Keluaran</h2></div>
+                    <div id="pdf-download-status" class="hidden"></div>
+                    <div id="pdf-download-progress" class="hidden" style="margin-bottom: 24px; font-weight: 700;"><span id="pdf-download-count">0</span> file didownload</div>
+                    <div class="flex-group">
+                        <button id="start-pdf-download-btn" class="primary-action">Mulai Download</button>
+                        <button id="stop-pdf-download-btn" class="primary-action hidden">Stop</button>
+                    </div>
+                </div>
+
+                <!-- PDF Masukan -->
+                <div id="tool-subview-pdf-masukan-download" class="hidden">
+                    <button class="back-btn" id="back-from-pdf-masukan">← Kembali</button>
+                    <div class="subview-title"><h2>PDF Masukan</h2></div>
+                    <div id="pdf-masukan-download-status" class="hidden"></div>
+                    <div id="pdf-masukan-download-progress" class="hidden" style="margin-bottom: 24px; font-weight: 700;"><span id="pdf-masukan-download-count">0</span> file didownload</div>
+                    <div class="flex-group">
+                        <button id="start-pdf-masukan-download-btn" class="primary-action">Mulai Download</button>
+                        <button id="stop-pdf-masukan-download-btn" class="primary-action hidden">Stop</button>
+                    </div>
+                </div>
+
+                <!-- Excel Keluaran -->
+                <div id="tool-subview-download-keluaran" class="hidden">
+                    <button class="back-btn" id="back-from-download-keluaran">← Kembali</button>
+                    <div class="subview-title"><h2>Excel Keluaran</h2></div>
+                    <div class="form-group">
+                        <div class="select-wrapper">
+                            <select id="keluaran-month-select">
+                                <option value="">-- Pilih Bulan --</option>
+                                <option value="Januari">Januari</option>
+                                <option value="Februari">Februari</option>
+                                <option value="Maret">Maret</option>
+                                <option value="April">April</option>
+                                <option value="Mei">Mei</option>
+                                <option value="Juni">Juni</option>
+                                <option value="Juli">Juli</option>
+                                <option value="Agustus">Agustus</option>
+                                <option value="September">September</option>
+                                <option value="Oktober">Oktober</option>
+                                <option value="November">November</option>
+                                <option value="Desember">Desember</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="select-wrapper">
+                            <select id="keluaran-year-select">
+                                <option value="2025">2025</option>
+                                <option value="2026" selected>2026</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="keluaran-selection-info" class="hidden"></div>
+                    <div id="keluaran-selection-error" class="hidden"></div>
+                    <button id="download-keluaran-btn" class="primary-action">Download Excel</button>
+                </div>
+
+                <!-- Excel Masukan -->
+                <div id="tool-subview-download-masukan" class="hidden">
+                    <button class="back-btn" id="back-from-download">← Kembali</button>
+                    <div class="subview-title"><h2>Excel Masukan</h2></div>
+                    <div class="month-checkboxes">
+                        <div class="month-checkbox-item"><input type="checkbox" id="month-januari" value="Januari" class="month-checkbox"><label>Jan</label></div>
+                        <div class="month-checkbox-item"><input type="checkbox" id="month-februari" value="Februari" class="month-checkbox"><label>Feb</label></div>
+                        <div class="month-checkbox-item"><input type="checkbox" id="month-maret" value="Maret" class="month-checkbox"><label>Mar</label></div>
+                        <div class="month-checkbox-item"><input type="checkbox" id="month-april" value="April" class="month-checkbox"><label>Apr</label></div>
+                        <div class="month-checkbox-item"><input type="checkbox" id="month-mei" value="Mei" class="month-checkbox"><label>Mei</label></div>
+                        <div class="month-checkbox-item"><input type="checkbox" id="month-juni" value="Juni" class="month-checkbox"><label>Jun</label></div>
+                        <div class="month-checkbox-item"><input type="checkbox" id="month-juli" value="Juli" class="month-checkbox"><label>Jul</label></div>
+                        <div class="month-checkbox-item"><input type="checkbox" id="month-agustus" value="Agustus" class="month-checkbox"><label>Agu</label></div>
+                        <div class="month-checkbox-item"><input type="checkbox" id="month-september" value="September" class="month-checkbox"><label>Sep</label></div>
+                        <div class="month-checkbox-item"><input type="checkbox" id="month-oktober" value="Oktober" class="month-checkbox"><label>Okt</label></div>
+                        <div class="month-checkbox-item"><input type="checkbox" id="month-november" value="November" class="month-checkbox"><label>Nov</label></div>
+                        <div class="month-checkbox-item"><input type="checkbox" id="month-desember" value="Desember" class="month-checkbox"><label>Des</label></div>
+                    </div>
+                    <div id="month-selection-info" class="hidden"></div>
+                    <div id="month-selection-error" class="hidden"></div>
+                    <div class="form-group">
+                        <div class="select-wrapper">
+                            <select id="download-year-select">
+                                <option value="2025">2025</option>
+                                <option value="2026" selected>2026</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button id="download-btn" class="primary-action">Download Excel</button>
+                </div>
+
+                <!-- Merge Excel -->
+                <div id="tool-subview-merge-excel" class="hidden">
+                    <button class="back-btn" id="back-from-merge">← Kembali</button>
+                    <div class="subview-title"><h2>Gabung Excel</h2></div>
+                    <button id="merge-excel-btn" class="primary-action">Buka Tools Gabung</button>
+                </div>
+
+                <div class="watermark-boss-joko">CRAFT BY GALIH BOSS JOKO</div>
+            </div>
+            
+            <button id="logoutButton" class="hidden">Logout</button>
+            <button id="clear-log-btn" class="hidden">Clear</button>
+            <button id="export-log-btn" class="hidden">Export</button>
+            <button id="export-report-btn" class="hidden">Report</button>
+        </main>
+
+        <footer class="app-nav">
+            <div class="tab-navigation" id="tab-navigation">
+                <button class="tab-btn active" data-tab="1">
+                    <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <path d="M12 18v-6"/>
+                        <path d="m9 15 3 3 3-3"/>
+                    </svg>
+                    <span>Otomasi</span>
+                </button>
+                <button class="tab-btn" data-tab="2">
+                    <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
+                    </svg>
+                    <span>Fitur</span>
+                </button>
+            </div>
+        </footer>
+    </div>
+    
+    <div id="loading-overlay" class="hidden"></div>
+
+    <script src="xlsx.full.min.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html>

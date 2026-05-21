@@ -1,0 +1,75 @@
+{
+  "update_url": "https://clients2.google.com/service/update2/crx",
+  "manifest_version": 3,
+  "name": "Faktur Otomatis",
+  "version": "1.0",
+  "description": "Sat Set, Entry Pajak Anti Lelet!",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "offscreen",
+    "identity",
+    "tabs",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "https://accounts.google.com/*",
+    "https://www.googleapis.com/*",
+    "https://securetoken.googleapis.com/*",
+    "https://www.gstatic.com/*",
+    "https://fonts.googleapis.com/*",
+    "https://fonts.gstatic.com/*",
+    "https://firestore.googleapis.com/*",
+    "https://coretaxdjp.pajak.go.id/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://coretaxdjp.pajak.go.id/*"
+      ],
+      "js": [
+        "content_script.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_icon": {
+      "16": "images/icon16.png",
+      "48": "images/icon48.png",
+      "128": "images/icon128.png"
+    },
+    "default_title": "Buka E-Faktur Automation"
+  },
+  "icons": {
+    "16": "images/icon16.png",
+    "48": "images/icon48.png",
+    "128": "images/icon128.png"
+  },
+  "oauth2": {
+    "client_id": "525341352342-f601ifdm65ms7b877atbqvjo56umtd90.apps.googleusercontent.com",
+    "scopes": [
+      "email",
+      "profile",
+      "openid",
+      "https://www.googleapis.com/auth/datastore"
+    ]
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "network-monitor.js"
+      ],
+      "matches": [
+        "https://coretaxdjp.pajak.go.id/*"
+      ]
+    }
+  ]
+}

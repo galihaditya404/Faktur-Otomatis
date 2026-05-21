@@ -1,0 +1,32 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Aturan untuk koleksi 'subscriptions'
+    match /subscriptions/{userId} {
+
+      // Izinkan pengguna untuk MEMBACA (get) dokumen langganan miliknya sendiri.
+      // Ini diperlukan agar ekstensi dapat memeriksa status dan sisa kuota.
+      allow get: if request.auth != null && request.auth.uid == userId;
+
+      // Izinkan pengguna untuk MEMPERBARUI (update) dokumen langganan miliknya sendiri.
+      // INI ADALAH PERBAIKAN untuk error PERMISSION_DENIED.
+      // Aturan ini mengizinkan operasi 'increment' pada field 'quotaUsed'.
+      // Untuk keamanan yang lebih tinggi di masa depan, Anda dapat membatasi
+      // agar hanya field 'quotaUsed' yang dapat diubah, tapi aturan ini
+      // adalah titik awal yang kuat dan aman untuk kebutuhan saat ini.
+      allow update: if request.auth != null && request.auth.uid == userId;
+
+      // Sebagai praktik terbaik, tolak operasi pembuatan (create) dan penghapusan (delete)
+      // dari sisi klien untuk mencegah penyalahgunaan. Operasi ini sebaiknya
+      // ditangani oleh backend Anda atau melalui Cloud Functions.
+      allow create, delete: if false;
+    }
+
+    // Anda bisa menambahkan aturan untuk koleksi lain di sini.
+    // Contoh:
+    // match /users/{userId} {
+    //   allow read, write: if request.auth != null && request.auth.uid == userId;
+    // }
+  }
+}

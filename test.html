@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Firebase Test</title>
+</head>
+<body>
+    <h1>Firebase Configuration Test</h1>
+    <div id="status">Loading...</div>
+    
+    <!-- Firebase SDK (Local) -->
+    <script src="firebase-sdk/firebase-app.js"></script>
+    <script src="firebase-sdk/firebase-auth.js"></script>
+    
+    <!-- App Scripts -->
+    <script src="firebase-config.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const statusDiv = document.getElementById('status');
+            
+            try {
+                // Test if Firebase is initialized
+                if (firebase.apps.length > 0) {
+                    statusDiv.innerHTML = '<p style="color: green;">✓ Firebase berhasil diinisialisasi</p>';
+                    
+                    // Test if auth is available
+                    if (window.auth) {
+                        statusDiv.innerHTML += '<p style="color: green;">✓ Firebase Auth tersedia</p>';
+                    } else {
+                        statusDiv.innerHTML += '<p style="color: red;">✗ Firebase Auth tidak tersedia</p>';
+                    }
+                    
+                    // Test if db is available (should be null since we removed firestore)
+                    if (window.db === null) {
+                        statusDiv.innerHTML += '<p style="color: orange;">⚠ Firebase Firestore tidak tersedia (expected)</p>';
+                    } else if (window.db) {
+                        statusDiv.innerHTML += '<p style="color: green;">✓ Firebase Firestore tersedia</p>';
+                    } else {
+                        statusDiv.innerHTML += '<p style="color: red;">✗ Firebase Firestore error</p>';
+                    }
+                    
+                } else {
+                    statusDiv.innerHTML = '<p style="color: red;">✗ Firebase gagal diinisialisasi</p>';
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '<p style="color: red;">✗ Error: ' + error.message + '</p>';
+            }
+        });
+    </script>
+</body>
+</html>
