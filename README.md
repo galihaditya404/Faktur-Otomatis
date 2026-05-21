@@ -1,7 +1,7 @@
-# E-Faktur Automation
+# Faktur Otomatis
 
-**Version:** 2.0
-**Description:** Otomatisasikan Proses Kreditkan Pajak Masukan, Sekali Klik Beres Semua.
+**Version:** 1.2
+**Description:** Sat Set, Entry Pajak Anti Lelet.
 
 ## 📋 Profil
 

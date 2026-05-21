@@ -69,117 +69,17 @@ const renderLogs = (logs = []) => {
     statusLog.scrollTop = statusLog.scrollHeight; // Scroll to bottom for new logs
 };
 
-/* --- TOAST NOTIFICATION --- */
-function showToast(title, message, type = 'success') {
-    const container = document.getElementById('toast-container');
-    if (!container) return;
-
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    
-    // Select icon based on type
-    let iconSvg = '';
-    if (type === 'success') {
-        iconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
-    } else if (type === 'error') {
-        iconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
-    } else {
-        iconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`;
-    }
-
-    toast.innerHTML = `
-        <div class="toast-icon">${iconSvg}</div>
-        <div class="toast-content">
-            <div class="toast-title">${title}</div>
-            <div class="toast-message">${message}</div>
-        </div>
-    `;
-
-    container.appendChild(toast);
-
-    // Remove toast after 4 seconds
-    setTimeout(() => {
-        toast.classList.add('hiding');
-        setTimeout(() => {
-            if (toast.parentNode === container) {
-                container.removeChild(toast);
-            }
-        }, 300); // match animation duration
-    }, 4000);
-}
-
-const updateAndSaveStatus = (rawMessage) => {
-    let msg = typeof rawMessage === 'string' ? rawMessage : String(rawMessage ?? '');
-    msg = sanitizeLogMessage(msg);
-
-    // Make logs user-friendly
-    let logPrefix = "🔹";
-    let type = 'info';
-    let showNotification = false;
-    let toastTitle = '';
-    
-    // Friendly Translations
-    const translations = {
-        'PROSES SELESAI': 'Semua tugas berhasil diselesaikan',
-        'Memulai Proses Baru': 'Sistem mulai berjalan',
-        'MEMULAI DOWNLOAD': 'Sistem mulai mengunduh',
-        'Menyiapkan download': 'Menyiapkan proses pengunduhan',
-        'MENGHENTIKAN PROSES': 'Proses dihentikan',
-        'STOP PAKSA aktif': 'Pemberhentian paksa dipicu',
-        'Error:': 'Masalah:',
-        'ERROR:': 'Masalah:',
-        'Gagal': 'Gagal',
-        'Server 502': 'Koneksi ke server pajak terputus, mencoba lagi',
-        'Server 401': 'Sesi login pajak Anda berakhir',
-        'Gagal menemukan form': 'Formulir halaman tidak ditemukan',
-        'Elemen': 'Bagian halaman',
-        'Timeout': 'Waktu tunggu habis',
-        'Element not found': 'Bagian halaman tidak ditemukan'
-    };
-
-    for (const [key, val] of Object.entries(translations)) {
-        if (msg.includes(key)) {
-            msg = msg.replace(new RegExp(key, 'gi'), val);
-        }
-    }
-
-    if (msg.toLowerCase().includes('masalah:') || msg.toLowerCase().includes('gagal')) {
-        logPrefix = "❌";
-        type = 'error';
-        toastTitle = 'Peringatan';
-        if (!msg.toLowerCase().includes('gagal berhenti')) {
-            showNotification = true;
-        }
-    } else if (msg.toLowerCase().includes('selesai') || msg.toLowerCase().includes('berhasil') || msg.toLowerCase().includes('successfully')) {
-        logPrefix = "✅";
-        type = 'success';
-        toastTitle = 'Sukses!';
-        if (msg.toLowerCase().includes('semua tugas berhasil diselesaikan') || msg.toLowerCase().includes('mulai mengunduh')) {
-            showNotification = true;
-        }
-    } else if (msg.toLowerCase().includes('sistem mulai') || msg.toLowerCase().includes('memulai')) {
-        logPrefix = "🚀";
-        type = 'info';
-        toastTitle = 'Memulai';
-        showNotification = true;
-        msg = msg.replace(/[-=]/g, '').trim();
-    } else if (msg.toLowerCase().includes('menyiapkan') || msg.toLowerCase().includes('mencoba')) {
-        logPrefix = "🔄";
-    }
-
-    if (showNotification) {
-        showToast(toastTitle, msg, type);
-    }
-
-    const timestamp = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const newLogEntry = `[${timestamp}] ${logPrefix} ${msg}`;
+const updateAndSaveStatus = (message) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const safeMessage = sanitizeLogMessage(typeof message === 'string' ? message : String(message ?? ''));
+    const newLogEntry = `[${timestamp}] ${safeMessage}`;
 
     chrome.storage.local.get({ efakturLogs: [] }, (result) => {
         const logs = Array.isArray(result.efakturLogs) ? result.efakturLogs : [];
         logs.push(newLogEntry); // Add to the end for chronological order (newest at bottom)
         if (logs.length > 1000) logs.splice(0, logs.length - 1000); // Keep last 1000 logs, remove oldest
         chrome.storage.local.set({ efakturLogs: logs }, () => {
-            if (typeof renderLogs === 'function') renderLogs(logs);
+            renderLogs(logs);
         });
     });
 };
@@ -599,10 +499,18 @@ function addEventListeners() {
             const safeMessage = typeof request.message === 'string' ? request.message : String(request.message ?? '');
             updateAndSaveStatus(safeMessage);
 
-            const isFinished = request.statusType === 'success' || request.statusType === 'error' || request.statusType === 'final' || request.statusType === 'final_completion';
+            const isFinished = request.statusType === 'success' || request.statusType === 'error' || request.statusType === 'final' || request.statusType === 'final_completion' || request.statusType === 'stopped';
             const isStopped = request.statusType === 'stopped';
 
             if (isFinished) {
+                // Show toast notification based on status
+                if (request.statusType === 'error' || (request.message && String(request.message).toLowerCase().includes('error'))) {
+                    if (typeof showToast === 'function') showToast('Otomatisasi Gagal', safeMessage, 'error');
+                } else if (request.statusType === 'stopped') {
+                    if (typeof showToast === 'function') showToast('Otomatisasi Berhenti', safeMessage, 'warning');
+                } else if (request.statusType === 'final' || request.statusType === 'final_completion' || request.statusType === 'success') {
+                    if (typeof showToast === 'function') showToast('Otomatisasi Selesai', safeMessage, 'success');
+                }
                 console.log('Popup:  DETECTED FINISHED STATUS - checking quota update conditions...');
                 // Use flag to prevent double quota consumption per session
                 const shouldUpdateQuota = (request.statusType === 'final_completion' || request.isFinalCompletion === true) && request.invoicesProcessed >= 0;
@@ -1915,3 +1823,49 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
 
+
+
+function showToast(title, message, type = 'info') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    
+    let icon = 'ℹ️';
+    if (type === 'success') icon = '✅';
+    if (type === 'error') icon = '❌';
+    if (type === 'warning') icon = '⚠️';
+
+    toast.innerHTML = `
+        <div class="toast-icon">${icon}</div>
+        <div class="toast-content">
+            <div class="toast-title">${title}</div>
+            <div class="toast-message">${message}</div>
+        </div>
+        <button class="toast-close">×</button>
+    `;
+
+    container.appendChild(toast);
+
+    // Trigger animation
+    setTimeout(() => {
+        toast.classList.add('show');
+    }, 10);
+
+    // Close button
+    toast.querySelector('.toast-close').addEventListener('click', () => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 400);
+    });
+
+    // Auto remove
+    setTimeout(() => {
+        if (document.contains(toast)) {
+            toast.classList.remove('show');
+            setTimeout(() => {
+                if (document.contains(toast)) toast.remove();
+            }, 400);
+        }
+    }, 5000);
+}

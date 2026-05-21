@@ -29,6 +29,13 @@ function turboDelay(normalMs, multiplier = 0.3) {
     return isTurboMode ? Math.max(Math.round(normalMs * multiplier), 50) : normalMs;
 }
 
+class AutomationAbortError extends Error {
+    constructor(reason) {
+        super(reason);
+        this.name = "AutomationAbortError";
+    }
+}
+
 class SessionLogoutError extends Error {
     constructor(reason, context = '') {
         super(reason);
@@ -49,7 +56,7 @@ function detectLogoutState() {
             return 'Halaman login terdeteksi dari URL';
         }
     } catch (error) {
-        if (error instanceof SessionLogoutError) { throw error; }
+        if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
         console.warn('Content script: Failed to inspect window location for logout detection:', error);
     }
 
@@ -128,7 +135,7 @@ function startNavigationMonitor() {
             }
         }, 1200);
     } catch (error) {
-        if (error instanceof SessionLogoutError) { throw error; }
+        if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
         console.warn('Content script: Failed to start navigation monitor:', error);
     }
 }
@@ -491,7 +498,7 @@ async function retryOperation(operation, maxRetries = 3, delayMs = 2000) {
                 await new Promise(resolve => setTimeout(resolve, delayMs));
             }
         } catch (error) {
-            if (error instanceof SessionLogoutError) { throw error; }
+            if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
             if (DEBUG) {
                 console.warn(`Content script: [RETRY]  Attempt ${attempt} failed:`, error.message);
             }
@@ -619,7 +626,7 @@ function injectNetworkResponseMonitor() {
         };
         (document.head || document.documentElement).appendChild(script);
     } catch (error) {
-        if (error instanceof SessionLogoutError) { throw error; }
+        if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
         console.warn('Content script: Failed to inject network monitor:', error);
     }
 }
@@ -737,7 +744,7 @@ function dismissServerErrorNode(element) {
                 console.log('Content script: [SERVER ERROR] Dismissed popup via button:', text);
                 return;
             } catch (error) {
-                if (error instanceof SessionLogoutError) { throw error; }
+                if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
                 console.warn('Content script: [SERVER ERROR] Failed to click dismissal button:', error);
             }
         }
@@ -820,7 +827,7 @@ function stopServerErrorObserver() {
         try {
             serverErrorObserver.disconnect();
         } catch (error) {
-            if (error instanceof SessionLogoutError) { throw error; }
+            if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
             console.warn('Content script: [SERVER ERROR] Failed to disconnect observer:', error);
         }
     }
@@ -874,7 +881,7 @@ function scheduleSessionReload() {
         try {
             window.location.reload();
         } catch (error) {
-            if (error instanceof SessionLogoutError) { throw error; }
+            if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
             console.warn('Content script: Failed to reload page after server error:', error);
         }
     }, 4000);
@@ -1107,7 +1114,7 @@ function syncFakturResultsToStorage() {
             chrome.storage.local.set({ efakturInvoiceResults: snapshot });
         }
     } catch (error) {
-        if (error instanceof SessionLogoutError) { throw error; }
+        if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
         console.warn("Content script: Failed to sync faktur results to storage:", error);
     }
 }
@@ -1278,20 +1285,29 @@ function resetFakturTracking() {
             chrome.storage.local.remove('efakturInvoiceResults');
         }
     } catch (error) {
-        if (error instanceof SessionLogoutError) { throw error; }
+        if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
         console.warn("Content script: Failed to clear stored invoice results:", error);
     }
     console.log("Content script: [FAKTUR TRACKING] Reset tracking array");
 }
 
 // Smart delay function with randomization to avoid bot detection
+
+function assertNotStopped() {
+    if (currentState === MachineState.STOPPED || currentState === MachineState.ERROR) {
+        throw new AutomationAbortError("Proses dihentikan.");
+    }
+}
+
 const delay = ms => {
+    assertNotStopped();
     const jitter = isTurboMode ? Math.random() * 60 - 30 : Math.random() * 200 - 100;
     return new Promise(res => setTimeout(res, turboDelay(ms) + jitter));
 };
 
 // Intelligent delay based on action type
 const smartDelay = (actionType) => {
+    assertNotStopped();
     const multiplier = isTurboMode ? 0.3 : 1;
     const delays = {
         'click': (200 + Math.random() * 300) * multiplier,
@@ -1307,6 +1323,7 @@ const smartDelay = (actionType) => {
 };
 
 const turboPause = (ms = 600) => {
+    assertNotStopped();
     if (!isTurboMode) {
         return Promise.resolve();
     }
@@ -1316,6 +1333,7 @@ const turboPause = (ms = 600) => {
 
 // Intelligent element waiting with faster polling
 async function waitForElementSmart(selector, maxWaitMs = 5000, parent = document) {
+    assertNotStopped();
     const startTime = Date.now();
     const pollInterval = 100; // Check every 100ms instead of 250ms
 
@@ -1708,7 +1726,7 @@ async function klikTombolRefresh() {
             return true;
 
         } catch (error) {
-            if (error instanceof SessionLogoutError) { throw error; }
+            if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
             console.error(`Content script: Error during refresh attempt ${retryCount + 1}:`, error);
             if (retryCount < maxRetries - 1) {
                 console.log("Content script: Retrying refresh button search after error...");
@@ -1735,7 +1753,7 @@ async function attemptBadGatewayRecovery() {
             console.warn("Content script: [SERVER ERROR] Refresh after 502 returned false");
         }
     } catch (error) {
-        if (error instanceof SessionLogoutError) { throw error; }
+        if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
         console.warn("Content script: [SERVER ERROR] Bad gateway recovery failed:", error);
     }
     await smartDelay('ui_update');
@@ -1874,7 +1892,7 @@ async function filterBulan() {
                     console.log(`Content script:  No result for: '${attempt.desc}'`);
                 }
             } catch (error) {
-                if (error instanceof SessionLogoutError) { throw error; }
+                if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
                 console.warn(`Content script:  Error with selector '${attempt.desc}':`, error.message);
             }
         }
@@ -2327,7 +2345,7 @@ async function filterBulan() {
             }
 
         } catch (error) {
-            if (error instanceof SessionLogoutError) { throw error; }
+            if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
             updateStatus(`  ->  ERROR: Gagal klik checkbox - ${error.message}`, 'error');
             console.error("Content script: Failed to click checkbox:", error);
             trigger.click(); // Tutup panel
@@ -2369,7 +2387,7 @@ async function filterBulan() {
             return false;
         }
     } catch (error) {
-        if (error instanceof SessionLogoutError) { throw error; }
+        if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
         updateStatus(`  -> ERROR KRITIS di filterBulan(): ${error.message}`, 'error');
         console.error("Content script: CRITICAL ERROR in filterBulan():", error);
         console.error("Content script: Stack trace:", error.stack);
@@ -2656,7 +2674,7 @@ async function resetFilterToSelectedMonths(selectedMonths = []) {
         return true;
 
     } catch (error) {
-        if (error instanceof SessionLogoutError) { throw error; }
+        if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
         console.error("Content script: [RESET FILTER SELECTED] Error:", error);
         updateStatus(`  ->  Error: ${error.message}`);
         return false;
@@ -2734,7 +2752,7 @@ async function applyYearFilter(year) {
         return true;
 
     } catch (error) {
-        if (error instanceof SessionLogoutError) { throw error; }
+        if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
         console.error("Content script: [YEAR FILTER] Error applying year filter:", error);
         updateStatus(`  -> Warning: Error filter tahun: ${error.message}, melanjutkan tanpa filter tahun`);
         return true; // Continue even if year filter fails
@@ -2879,7 +2897,7 @@ async function resetFilterTo12Months() {
         return true;
 
     } catch (error) {
-        if (error instanceof SessionLogoutError) { throw error; }
+        if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
         console.error("Content script: [RESET FILTER 12M] Error:", error);
         updateStatus(`  ->  Error: ${error.message}`);
         return false;
@@ -2958,7 +2976,7 @@ async function clickClearFilterButton(multiSelect) {
             }
 
         } catch (error) {
-            if (error instanceof SessionLogoutError) { throw error; }
+            if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
             console.error("Content script: [CLEAR FILTER] Error clicking clear filter button:", error);
             updateStatus(`  ->  Warning: Tidak dapat membersihkan filter - ${error.message}`);
             return false;
@@ -3064,7 +3082,7 @@ async function applyFilterAfterSelection(multiSelect) {
         return true;
 
     } catch (error) {
-        if (error instanceof SessionLogoutError) { throw error; }
+        if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
         console.error("Content script: [APPLY FILTER] Error applying filter:", error);
         updateStatus(`  ->  Warning: Tidak dapat memastikan filter diterapkan - ${error.message}`);
         return false;
@@ -3224,7 +3242,7 @@ async function filterTahunPajakHeader(tahun) {
         return true;
 
     } catch (error) {
-        if (error instanceof SessionLogoutError) { throw error; }
+        if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
         updateStatus(`  ->  GAGAL: Error saat mengatur filter tahun - ${error.message}`, 'error');
         console.error("Content script: [FILTER TAHUN HEADER] Error:", error);
         return false;
@@ -3488,7 +3506,7 @@ async function filterNomorFaktur(nomorFaktur) {
         }
 
     } catch (error) {
-        if (error instanceof SessionLogoutError) { throw error; }
+        if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
         updateStatus(`  ->  ERROR: Gagal filter nomor faktur - ${error.message}`, 'error');
         console.error("Content script: Error in filterNomorFaktur:", error);
         return false;
@@ -3586,7 +3604,19 @@ async function ubahMasaPajak(bulan) {
 
     //  ENHANCED PANEL DETECTION: Improved retry mechanism with better validation
     console.log("Content script: [DIAGNOSIS DROPDOWN] Waiting for panel to appear...");
-    let panel = await waitForElement('.p-dropdown-panel.p-component:not(.p-hidden)', 3000);
+    
+    // Custom robust wait for the most recently opened panel
+    let panel = null;
+    for(let w = 0; w < 30; w++) {
+        assertNotStopped();
+        const panels = Array.from(document.querySelectorAll('.p-dropdown-panel:not(.p-hidden)'));
+        const visiblePanels = panels.filter(p => p.offsetWidth > 0 && window.getComputedStyle(p).display !== 'none');
+        if (visiblePanels.length > 0) {
+            panel = visiblePanels[visiblePanels.length - 1]; // The most recently appended panel is usually the active one
+            break;
+        }
+        await new Promise(r => setTimeout(r, 100));
+    }
 
     if (!panel) {
         console.log("Content script: [DIAGNOSIS DROPDOWN] Panel not found with primary selector, trying alternatives...");
@@ -3827,7 +3857,19 @@ async function klikTombolFinal(teksTombol) {
         return false;
     }
 
-    const button = await waitForElement(`button[aria-label="${ariaLabel}"]`);
+    // Attempt to find by aria-label first, then by exact text match
+    let button = await waitForElement(`button[aria-label="${ariaLabel}"]`, 2000);
+    if (!button) {
+        // Fallback: search all buttons for the exact text (e.g. "Kreditkan") or ariaLabel
+        const buttons = document.querySelectorAll('button');
+        button = Array.from(buttons).find(btn => {
+            const textMatch = btn.textContent && btn.textContent.trim().toLowerCase() === teksTombol.toLowerCase();
+            const ariaMatch = btn.getAttribute('aria-label') && btn.getAttribute('aria-label').toLowerCase().includes(ariaLabel.toLowerCase());
+            const titleMatch = btn.getAttribute('title') && btn.getAttribute('title').toLowerCase().includes(teksTombol.toLowerCase());
+            return textMatch || ariaMatch || titleMatch;
+        });
+    }
+
     if (!button || button.disabled) {
         updateStatus(`  -> GAGAL: Tombol "${teksTombol}" tidak ditemukan atau tidak aktif.`, 'error');
         return false;
@@ -4103,7 +4145,7 @@ async function kembaliKeHalamanUtama() {
             }
 
         } catch (error) {
-            if (error instanceof SessionLogoutError) { throw error; }
+            if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
             console.error(`Content script: Error during navigation attempt ${retryCount + 1}:`, error);
             if (retryCount < maxRetries - 1) {
                 console.log("Content script: Retrying navigation after error...");
@@ -4262,11 +4304,16 @@ async function ubahTahunPajak(tahun) {
         yearInput.dispatchEvent(new Event('input', { bubbles: true }));
         await smartDelay('ui_update');
 
-        // Set the new value
-        yearInput.value = tahun;
-
-        // Trigger events to notify Angular/PrimeNG of the change
+        // Set the new value using robust method for Angular/React
+        yearInput.value = '';
         yearInput.dispatchEvent(new Event('input', { bubbles: true }));
+        
+        // Use native setter
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        nativeInputValueSetter.call(yearInput, tahun);
+        
+        yearInput.dispatchEvent(new Event('input', { bubbles: true }));
+        yearInput.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'Enter', code: 'Enter', keyCode: 13 }));
         yearInput.dispatchEvent(new Event('change', { bubbles: true }));
         yearInput.dispatchEvent(new Event('blur', { bubbles: true }));
 
@@ -4289,7 +4336,7 @@ async function ubahTahunPajak(tahun) {
         return true;
 
     } catch (error) {
-        if (error instanceof SessionLogoutError) { throw error; }
+        if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
         updateStatus(`  -> GAGAL: Error saat mengubah tahun pajak - ${error.message}`, 'error');
         console.error("Content script: [TAHUN PAJAK] Error:", error);
         return false;
@@ -4360,7 +4407,7 @@ async function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
                 console.warn(`Content script: [RETRY] Attempt ${attempt + 1}/${maxRetries} returned explicit failure result`, result.reason || result);
             }
         } catch (error) {
-            if (error instanceof SessionLogoutError) { throw error; }
+            if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
             console.warn(`Content script: [RETRY] Attempt ${attempt + 1}/${maxRetries} failed:`, error.message);
         }
 
@@ -4595,7 +4642,7 @@ async function prosesSatuFaktur(faktur, bulan, tahun, aksi) {
                 logAutomationStep("Masa pajak change failed", { bulan, berhasilUbah });
             }
         } catch (error) {
-            if (error instanceof SessionLogoutError) { throw error; }
+            if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
             masaPajakMetadata.verificationStatus = 'change-error';
             masaPajakMetadata.validationReason = error.message;
             updateStatus(`  -> GAGAL: Error saat mengubah masa pajak - ${error.message}`, 'error');
@@ -4641,7 +4688,7 @@ async function prosesSatuFaktur(faktur, bulan, tahun, aksi) {
                 logAutomationStep("Tahun pajak change failed", { tahun, berhasilUbahTahun });
             }
         } catch (error) {
-            if (error instanceof SessionLogoutError) { throw error; }
+            if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
             updateStatus(`  -> PERINGATAN: Error saat mengubah tahun pajak - ${error.message}`, 'warning');
             console.warn("Content script: Error in ubahTahunPajak:", error);
             logAutomationStep("Tahun pajak change error", { error: error.message, tahun });
@@ -4654,7 +4701,7 @@ async function prosesSatuFaktur(faktur, bulan, tahun, aksi) {
     try {
         berhasilKlik = await klikTombolFinal(aksi);
     } catch (error) {
-        if (error instanceof SessionLogoutError) { throw error; }
+        if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
         updateStatus(`  -> GAGAL: Error saat klik tombol final - ${error.message}`, 'error');
         console.error("Content script: Error in klikTombolFinal:", error);
         berhasilKlik = false;
@@ -5596,7 +5643,7 @@ async function startAutomation() {
                 try {
                     refreshBerhasil = await klikTombolRefresh();
                 } catch (error) {
-                    if (error instanceof SessionLogoutError) { throw error; }
+                    if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
                     updateStatus(`Gagal me-refresh halaman - ${error.message}. Proses dihentikan.`, "error");
                     console.error("Content script: Page refresh failed with error:", error);
                     logAutomationStep("Page refresh error for first invoice", { error: error.message, faktur });
@@ -5630,7 +5677,7 @@ async function startAutomation() {
                     filterBulanBerhasil = await retryOperation(monthAction, 3, 3000);
                     currentActiveMonthFilter = targetMonthName;
                 } catch (error) {
-                    if (error instanceof SessionLogoutError) { throw error; }
+                    if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
                     updateStatus(`Gagal mengatur filter bulan - ${error.message}. Proses dihentikan.`, "error");
                     console.error("Content script: Month filter setup failed with error:", error);
                     logAutomationStep("Filter bulan error for first invoice", { error: error.message, faktur });
@@ -5874,7 +5921,7 @@ async function startAutomation() {
                 try {
                     filterNomorBerhasil = await retryOperation(() => filterNomorFaktur(faktur), 3, 2000);
                 } catch (error) {
-                    if (error instanceof SessionLogoutError) { throw error; }
+                    if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
                     updateStatus(`Gagal mengatur filter nomor faktur - ${error.message}. Proses dihentikan.`, "error");
                     console.error("Content script: Invoice number filter setup failed with error:", error);
                     logAutomationStep("Filter nomor faktur error for first invoice", { error: error.message, faktur });
@@ -5907,7 +5954,7 @@ async function startAutomation() {
                     try {
                         hasilProsesPertama = await prosesSatuFaktur(faktur, automationData.bulanDipilih, automationData.tahunDipilih, automationData.aksiFinal);
                     } catch (error) {
-                        if (error instanceof SessionLogoutError) { throw error; }
+                        if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
                         updateStatus(`ERROR: Gagal memproses faktur pertama ${faktur} - ${error.message}`, 'error');
                         console.error(`Content script: Error processing first faktur ${faktur}:`, error);
                         logAutomationStep("First faktur processing error", { faktur, error: error.message, stack: error.stack });
@@ -6174,7 +6221,7 @@ async function startAutomation() {
                 hasil = await prosesSatuFaktur(faktur, automationData.bulanDipilih, automationData.tahunDipilih, automationData.aksiFinal);
                 logAutomationStep("Faktur processing completed", { faktur, hasil });
             } catch (error) {
-                if (error instanceof SessionLogoutError) { throw error; }
+                if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
                 updateStatus(`  ->  ERROR: Gagal memproses faktur ${faktur} - ${error.message}`, 'error');
                 console.error(`Content script: Error processing faktur ${faktur}:`, error);
                 logAutomationStep("Faktur processing error", { faktur, error: error.message, stack: error.stack });
@@ -6355,7 +6402,7 @@ async function startAutomation() {
             try {
                 kembaliBerhasil = await kembaliKeHalamanUtama();
             } catch (error) {
-                if (error instanceof SessionLogoutError) { throw error; }
+                if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
                 updateStatus(`Gagal kembali ke halaman utama - ${error.message}. Proses dihentikan.`, "error");
                 console.error("Content script: Navigation back to main page failed with error:", error);
                 logAutomationStep("Navigation error", { error: error.message, faktur });
@@ -6408,7 +6455,7 @@ async function startAutomation() {
             try {
                 refreshBerhasil = await klikTombolRefresh();
             } catch (error) {
-                if (error instanceof SessionLogoutError) { throw error; }
+                if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
                 updateStatus(`Gagal me-refresh halaman - ${error.message}. Proses dihentikan.`, "error");
                 console.error("Content script: Page refresh failed with error:", error);
                 logAutomationStep("Page refresh error", { error: error.message, faktur });
@@ -6466,7 +6513,7 @@ async function startAutomation() {
             try {
                 filterBerhasil = await retryOperation(filterBulan, 3, 3000);
             } catch (error) {
-                if (error instanceof SessionLogoutError) { throw error; }
+                if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
                 updateStatus(` Gagal mengatur filter bulan - ${error.message}. Proses dihentikan.`, "error");
                 console.error("Content script: Month filter setup failed with error:", error);
                 logAutomationStep("Filter bulan error", { error: error.message, faktur });
@@ -6557,7 +6604,7 @@ async function startAutomation() {
                     await new Promise(resolve => setTimeout(resolve, 500));
                 }
             } catch (error) {
-                if (error instanceof SessionLogoutError) { throw error; }
+                if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
                 updateStatus(` Gagal mengatur filter nomor faktur - ${error.message}. Proses dihentikan.`, "error");
                 console.error("Content script: Invoice number filter setup failed with error:", error);
                 logAutomationStep("Filter nomor faktur error", { error: error.message, faktur });
@@ -6584,7 +6631,7 @@ async function startAutomation() {
             try {
                 hasilProses = await prosesSatuFaktur(faktur, automationData.bulanDipilih, automationData.tahunDipilih, automationData.aksiFinal);
             } catch (error) {
-                if (error instanceof SessionLogoutError) { throw error; }
+                if (error instanceof SessionLogoutError || error instanceof AutomationAbortError) { throw error; }
                 updateStatus(` ERROR: Gagal memproses faktur ${faktur} - ${error.message}`, 'error');
                 console.error(`Content script: Error processing faktur ${faktur} in loop:`, error);
                 logAutomationStep("Faktur processing error in loop", { faktur, error: error.message, stack: error.stack });
@@ -6700,6 +6747,13 @@ async function startAutomation() {
         await finalizeAutomation(MachineState.RUNNING, totalBerhasil, fakturList.length);
 
     } catch (unexpectedError) {
+        if (unexpectedError instanceof AutomationAbortError) {
+            console.warn("Content script: Automation aborted by user");
+            if (finalizeCalled) return;
+            updateStatus("Otomatisasi dihentikan seketika oleh pengguna.", "stopped", totalBerhasil, true, totalBerhasil, fakturList.length);
+            await finalizeAutomation(MachineState.STOPPED, totalBerhasil, fakturList.length);
+            return;
+        }
         if (unexpectedError instanceof SessionLogoutError) {
             if (finalizeCalled) {
                 console.warn("Content script: Session logout error caught after finalize - skipping duplicate handling");
