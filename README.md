@@ -1,11 +1,11 @@
 # Faktur Otomatis
 
-**Version:** 1.2
+**Version:** 1.1
 **Description:** Sat Set, Entry Pajak Anti Lelet.
 
 ## 📋 Profil
 
-**E-Faktur Automation** adalah ekstensi browser Chrome yang dirancang untuk membantu Wajib Pajak dan konsultan pajak dalam mengelola Faktur Pajak Masukan di sistem Coretax DJP. Alat ini mengotomatisasi tugas-tugas repetitif seperti mengubah masa pajak, mengkreditkan faktur, dan mengunduh data dalam jumlah besar, sehingga menghemat waktu dan meminimalkan kesalahan manusia.
+**Faktur Otomatis** adalah ekstensi browser Chrome yang dirancang untuk membantu Wajib Pajak dan konsultan pajak dalam mengelola Faktur Pajak Masukan di sistem Coretax DJP. Alat ini mengotomatisasi tugas-tugas repetitif seperti mengubah masa pajak, mengkreditkan faktur, dan mengunduh data dalam jumlah besar, sehingga menghemat waktu dan meminimalkan kesalahan manusia.
 
 ## 🛠️ Fungsi Utama
 
@@ -32,72 +32,7 @@ Alat bantu untuk menggabungkan hasil unduhan yang terpecah.
 - **Smart Header**: Mempertahankan header dari file pertama dan menghapus header dari file berikutnya.
 - **Privasi Terjamin**: Proses penggabungan dilakukan 100% di browser (lokal), tanpa upload ke server.
 
-## ⚙️ Cara Kerja
 
-Ekstensi ini bekerja sebagai jembatan antara pengguna dan antarmuka web Coretax.
-
-### Flow Diagram
-
-```mermaid
-graph TD
-    User[User] -->|Interacts| Popup[Extension Popup UI]
-    Popup -->|Login via Google| Auth[Firebase Auth]
-    
-    subgraph "Automation Process"
-        Popup -->|Upload CSV & Config| ContentScript[Content Script]
-        ContentScript -->|Injects/Manipulates DOM| Coretax[Coretax Web Page]
-        Coretax -->|Responses| ContentScript
-        ContentScript -->|Status Updates| Popup
-    end
-
-    subgraph "Download Process"
-        Popup -->|Select Month| ContentScript
-        ContentScript -->|Iterate Pages| Coretax
-        Coretax -->|Download Trigger| Browser[Browser Download]
-    end
-
-    subgraph "Merge Excel Process"
-        User -->|Select Files| Popup
-        Popup -->|Read Files (ArrayBuffer)| Memory[Browser Memory]
-        Memory -->|Process with SheetJS| MergedData[Merged Data]
-        MergedData -->|Create Blob| UserDownload[Download Merged File]
-    end
-    
-    style User fill:#f9f,stroke:#333,stroke-width:2px
-    style Coretax fill:#ccf,stroke:#333,stroke-width:2px
-    style Popup fill:#cfc,stroke:#333,stroke-width:2px
-```
-
-### Penjelasan Proses
-
-1.  **Login & Autentikasi**:
-    - User login menggunakan akun Google via Firebase Authentication.
-    - Status langganan dan kuota dicek untuk mengaktifkan fitur premium.
-
-2.  **Proses Otomatisasi**:
-    - User mengunggah file CSV berisi daftar Nomor Faktur.
-    - Ekstensi membaca file dan mengirimkan instruksi ke *Content Script* yang berjalan di halaman Coretax.
-    - *Content Script* mencari faktur berdasarkan nomor, mengubah masa pajak, dan menyimpan perubahan sesuai konfigurasi user.
-    - Log aktivitas ditampilkan secara real-time di Popup.
-
-3.  **Proses Download**:
-    - User memilih bulan yang ingin diunduh.
-    - Ekstensi menavigasi halaman Coretax, mengklik tombol download, dan menangani paginasi secara otomatis sampai semua data terunduh.
-
-4.  **Proses Gabung Excel**:
-    - User memilih file-file Excel dari komputer lokal.
-    - Ekstensi menggunakan library `SheetJS` untuk membaca dan menggabungkan data di dalam memori browser.
-    - File hasil gabungan dibuat dan diunduh langsung tanpa pernah meninggalkan komputer user.
-
-## 🔒 Security & Privacy
-
-Keamanan data adalah prioritas utama kami. Berikut adalah detail implementasi keamanan:
-
--   **Client-Side Processing**: Semua proses sensitif, terutama penggabungan file Excel, dilakukan sepenuhnya di sisi klien (browser pengguna). **Tidak ada file Excel atau data pajak yang diunggah ke server kami.**
--   **Firebase Authentication**: Kami menggunakan Google Firebase untuk autentikasi yang aman. Kami hanya menyimpan email dan status langganan. Password akun Google Anda tidak pernah kami ketahui.
--   **No External Analytics**: Ekstensi ini tidak menggunakan layanan analitik pihak ketiga yang melacak aktivitas browsing Anda.
--   **Permissions**: Izin yang diminta (seperti `activeTab`, `scripting`) hanya digunakan untuk berinteraksi dengan halaman Coretax saat Anda menjalankan perintah otomatisasi.
--   **Local Library**: Library pihak ketiga seperti `SheetJS` disertakan secara lokal dalam paket ekstensi, bukan dimuat dari CDN eksternal, untuk mencegah potensi risiko keamanan jaringan.
 
 ## ℹ️ Informasi Lainnya
 
@@ -113,7 +48,6 @@ Keamanan data adalah prioritas utama kami. Berikut adalah detail implementasi ke
 
 ### Credits
 -   **SheetJS (xlsx)**: Digunakan untuk manipulasi file Excel.
--   **Firebase**: Digunakan untuk backend autentikasi dan manajemen user.
 
 ---
-*Dibuat Galih Boss Joko untuk mempermudah ACD.*
+*Dibuat Galih Boss Joko untuk mempermudah ACD - ICBP NSF.*
