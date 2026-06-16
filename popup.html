@@ -125,152 +125,34 @@
             
             <!-- TAB 2: Fitur Tools -->
             <div id="tab-content-2" class="tab-content">
-                <div id="tools-menu-view">
-                    <div class="section-title">Keluaran (Out)</div>
-                    <div class="tool-group">
-                        <div class="tool-item-header" data-navigate="pdf-download">
-                            <div class="tool-item-icon">📄</div>
-                            <div>
-                                <div class="tool-item-title">PDF Keluaran</div>
-                                <div class="tool-item-desc">Unduh berkas PDF Pajak Keluaran</div>
-                            </div>
-                        </div>
-                        <div class="tool-item-header" data-navigate="download-keluaran">
-                            <div class="tool-item-icon">📊</div>
-                            <div>
-                                <div class="tool-item-title">Excel Keluaran</div>
-                                <div class="tool-item-desc">Unduh rekap daftar Excel</div>
-                            </div>
-                        </div>
-                    </div>
 
-                    <div class="section-title">Masukan (In)</div>
-                    <div class="tool-group">
-                        <div class="tool-item-header" data-navigate="pdf-masukan-download">
-                            <div class="tool-item-icon">📄</div>
-                            <div>
-                                <div class="tool-item-title">PDF Masukan</div>
-                                <div class="tool-item-desc">Unduh berkas PDF Pajak Masukan</div>
-                            </div>
-                        </div>
-                        <div class="tool-item-header" data-navigate="download-masukan">
-                            <div class="tool-item-icon">📥</div>
-                            <div>
-                                <div class="tool-item-title">Excel Masukan</div>
-                                <div class="tool-item-desc">Unduh rekap daftar Excel</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="section-title">Utilities</div>
-                    <div class="tool-group">
-                        <div class="tool-item-header" data-navigate="merge-excel">
-                            <div class="tool-item-icon">📚</div>
-                            <div>
-                                <div class="tool-item-title">Gabung Excel</div>
-                                <div class="tool-item-desc">Satukan beberapa sheet Excel</div>
-                            </div>
-                        </div>
-                    </div>
+                <div class="section-title" style="margin-top: 24px; display: flex; justify-content: space-between; align-items: center;">
+                    <span>📋 Log Aktivitas</span>
+                    <span id="log-stats-fitur" style="font-size: 0.75rem; font-weight: normal; color: var(--text-muted); background: var(--bg-card); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color);">
+                        DURASI: <b id="stat-durasi" style="color: #475569;">00:00</b> &bull; BERHASIL: <b id="stat-sukses" style="color: #166534;">0</b> &bull; GAGAL: <b id="stat-gagal" style="color: #991b1b;">0</b> &bull; SKIP: <b id="stat-skip" style="color: #ca8a04;">0</b>
+                    </span>
                 </div>
-
-                <!-- Subviews (hidden by default) -->
-                <!-- PDF Keluaran -->
-                <div id="tool-subview-pdf-download" class="hidden">
-                    <button class="back-btn" id="back-from-pdf">← Kembali</button>
-                    <div class="subview-title"><h2>PDF Keluaran</h2></div>
-                    <div id="pdf-download-status" class="hidden"></div>
-                    <div id="pdf-download-progress" class="hidden" style="margin-bottom: 24px; font-weight: 700;"><span id="pdf-download-count">0</span> file didownload</div>
-                    <div class="flex-group">
-                        <button id="start-pdf-download-btn" class="primary-action">Mulai Download</button>
-                        <button id="stop-pdf-download-btn" class="primary-action hidden">Stop</button>
-                    </div>
+                <div class="log-wrapper" style="max-height: 600px; overflow-y: auto; border-radius: var(--radius-md); border: 1px solid var(--border-color); background: var(--bg-card); margin-bottom: 12px;">
+                    <table class="log-table" style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
+                        <thead style="position: sticky; top: 0; background: #ffffff; z-index: 10; border-bottom: 1px solid var(--border-color); box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                            <tr>
+                                <th style="padding: 8px; text-align: left; font-weight: 600;">Waktu</th>
+                                <th style="padding: 8px; text-align: left; font-weight: 600;">No. Faktur</th>
+                                <th style="padding: 8px; text-align: left; font-weight: 600;">Status</th>
+                                <th style="padding: 8px; text-align: left; font-weight: 600;">Keterangan</th>
+                            </tr>
+                        </thead>
+                        <tbody id="status-log-fitur">
+                            <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px;">Log akan muncul di sini saat proses berjalan</td></tr>
+                        </tbody>
+                    </table>
                 </div>
-
-                <!-- PDF Masukan -->
-                <div id="tool-subview-pdf-masukan-download" class="hidden">
-                    <button class="back-btn" id="back-from-pdf-masukan">← Kembali</button>
-                    <div class="subview-title"><h2>PDF Masukan</h2></div>
-                    <div id="pdf-masukan-download-status" class="hidden"></div>
-                    <div id="pdf-masukan-download-progress" class="hidden" style="margin-bottom: 24px; font-weight: 700;"><span id="pdf-masukan-download-count">0</span> file didownload</div>
-                    <div class="flex-group">
-                        <button id="start-pdf-masukan-download-btn" class="primary-action">Mulai Download</button>
-                        <button id="stop-pdf-masukan-download-btn" class="primary-action hidden">Stop</button>
-                    </div>
-                </div>
-
-                <!-- Excel Keluaran -->
-                <div id="tool-subview-download-keluaran" class="hidden">
-                    <button class="back-btn" id="back-from-download-keluaran">← Kembali</button>
-                    <div class="subview-title"><h2>Excel Keluaran</h2></div>
-                    <div class="form-group">
-                        <div class="select-wrapper">
-                            <select id="keluaran-month-select">
-                                <option value="">-- Pilih Bulan --</option>
-                                <option value="Januari">Januari</option>
-                                <option value="Februari">Februari</option>
-                                <option value="Maret">Maret</option>
-                                <option value="April">April</option>
-                                <option value="Mei">Mei</option>
-                                <option value="Juni">Juni</option>
-                                <option value="Juli">Juli</option>
-                                <option value="Agustus">Agustus</option>
-                                <option value="September">September</option>
-                                <option value="Oktober">Oktober</option>
-                                <option value="November">November</option>
-                                <option value="Desember">Desember</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <div class="select-wrapper">
-                            <select id="keluaran-year-select">
-                                <option value="2025">2025</option>
-                                <option value="2026" selected>2026</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div id="keluaran-selection-info" class="hidden"></div>
-                    <div id="keluaran-selection-error" class="hidden"></div>
-                    <button id="download-keluaran-btn" class="primary-action">Download Excel</button>
-                </div>
-
-                <!-- Excel Masukan -->
-                <div id="tool-subview-download-masukan" class="hidden">
-                    <button class="back-btn" id="back-from-download">← Kembali</button>
-                    <div class="subview-title"><h2>Excel Masukan</h2></div>
-                    <div class="month-checkboxes">
-                        <div class="month-checkbox-item"><input type="checkbox" id="month-januari" value="Januari" class="month-checkbox"><label>Jan</label></div>
-                        <div class="month-checkbox-item"><input type="checkbox" id="month-februari" value="Februari" class="month-checkbox"><label>Feb</label></div>
-                        <div class="month-checkbox-item"><input type="checkbox" id="month-maret" value="Maret" class="month-checkbox"><label>Mar</label></div>
-                        <div class="month-checkbox-item"><input type="checkbox" id="month-april" value="April" class="month-checkbox"><label>Apr</label></div>
-                        <div class="month-checkbox-item"><input type="checkbox" id="month-mei" value="Mei" class="month-checkbox"><label>Mei</label></div>
-                        <div class="month-checkbox-item"><input type="checkbox" id="month-juni" value="Juni" class="month-checkbox"><label>Jun</label></div>
-                        <div class="month-checkbox-item"><input type="checkbox" id="month-juli" value="Juli" class="month-checkbox"><label>Jul</label></div>
-                        <div class="month-checkbox-item"><input type="checkbox" id="month-agustus" value="Agustus" class="month-checkbox"><label>Agu</label></div>
-                        <div class="month-checkbox-item"><input type="checkbox" id="month-september" value="September" class="month-checkbox"><label>Sep</label></div>
-                        <div class="month-checkbox-item"><input type="checkbox" id="month-oktober" value="Oktober" class="month-checkbox"><label>Okt</label></div>
-                        <div class="month-checkbox-item"><input type="checkbox" id="month-november" value="November" class="month-checkbox"><label>Nov</label></div>
-                        <div class="month-checkbox-item"><input type="checkbox" id="month-desember" value="Desember" class="month-checkbox"><label>Des</label></div>
-                    </div>
-                    <div id="month-selection-info" class="hidden"></div>
-                    <div id="month-selection-error" class="hidden"></div>
-                    <div class="form-group">
-                        <div class="select-wrapper">
-                            <select id="download-year-select">
-                                <option value="2025">2025</option>
-                                <option value="2026" selected>2026</option>
-                            </select>
-                        </div>
-                    </div>
-                    <button id="download-btn" class="primary-action">Download Excel</button>
-                </div>
-
-                <!-- Merge Excel -->
-                <div id="tool-subview-merge-excel" class="hidden">
-                    <button class="back-btn" id="back-from-merge">← Kembali</button>
-                    <div class="subview-title"><h2>Gabung Excel</h2></div>
-                    <button id="merge-excel-btn" class="primary-action">Buka Tools Gabung</button>
+                <div class="flex-group" style="display: flex; gap: 8px;">
+                    <button id="btnExportCSV" style="flex: 1; padding: 10px; background-color: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; border-radius: 6px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s;" onmouseover="this.style.backgroundColor='#dcfce7'" onmouseout="this.style.backgroundColor='#f0fdf4'"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Export CSV</button>
+                    <button id="btnHapusLogFitur" style="flex: 1; padding: 10px; background-color: #fef2f2; color: #dc2626; border: 1px solid #fecaca; border-radius: 6px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s;" onmouseover="this.style.backgroundColor='#fee2e2'" onmouseout="this.style.backgroundColor='#fef2f2'">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        Hapus Log
+                    </button>
                 </div>
 
                 <div class="watermark-boss-joko">CRAFT BY GALIH BOSS JOKO</div>

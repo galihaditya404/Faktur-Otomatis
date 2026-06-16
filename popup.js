@@ -47,26 +47,127 @@ function updateVersionDisplay() {
 
 // Functions for real-time logs
 const renderLogs = (logs = []) => {
-    if (!statusLog) {
-        return;
-    }
+    const statusLog1 = document.getElementById('status-log');
+    const statusLog2 = document.getElementById('status-log-fitur');
+    
+    if (!statusLog1 && !statusLog2) return;
 
-    statusLog.replaceChildren();
+    if (statusLog1) statusLog1.replaceChildren();
+    if (statusLog2) statusLog2.replaceChildren();
 
     if (!Array.isArray(logs) || logs.length === 0) {
-        statusLog.textContent = 'Status: Menunggu perintah...';
+        if (statusLog1) statusLog1.textContent = 'Status: Menunggu perintah...';
+        if (statusLog2) statusLog2.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px;">Log akan muncul di sini saat proses berjalan</td></tr>';
+        
+        // Reset stats
+        const statSukses = document.getElementById('stat-sukses');
+        const statGagal = document.getElementById('stat-gagal');
+        const statSkip = document.getElementById('stat-skip');
+        const statDurasi = document.getElementById('stat-durasi');
+        if(statSukses) statSukses.textContent = '0';
+        if(statGagal) statGagal.textContent = '0';
+        if(statSkip) statSkip.textContent = '0';
+        if(statDurasi) statDurasi.textContent = '00:00';
     } else {
-        const fragment = document.createDocumentFragment();
+        const fragment1 = document.createDocumentFragment();
+        const fragment2 = document.createDocumentFragment();
+        
+        let countSukses = 0;
+        let countGagal = 0;
+        let countSkip = 0;
+        
+        let firstLogTime = null;
+        let lastLogTime = null;
+
         logs.forEach((entry) => {
-            const logLine = document.createElement('div');
             const rawEntry = typeof entry === 'string' ? entry : String(entry ?? '');
-            logLine.textContent = sanitizeLogMessage(rawEntry);
-            fragment.appendChild(logLine);
+            const safeText = sanitizeLogMessage(rawEntry);
+            
+            const logLine1 = document.createElement('div');
+            logLine1.textContent = safeText;
+            fragment1.appendChild(logLine1);
+            
+            // Tab 2 Table Row
+            const timeMatch = safeText.match(/^\[(.*?)\]\s*(.*)/);
+            const waktu = timeMatch ? timeMatch[1] : '';
+            const restOfText = timeMatch ? timeMatch[2] : safeText;
+            
+            if (timeMatch) {
+                const d = new Date(new Date().toDateString() + " " + timeMatch[1]);
+                if (!isNaN(d.getTime())) {
+                    if (!firstLogTime) firstLogTime = d.getTime();
+                    lastLogTime = d.getTime();
+                }
+            }
+            
+            let statusHtml = '';
+            let bgRow = '';
+            let isInfo = true;
+            
+            if (restOfText.includes('[BERHASIL]')) {
+                statusHtml = '<span style="background:#dcfce7; color:#166534; padding:2px 6px; border-radius:4px; font-weight:bold;">SUKSES</span>';
+                bgRow = 'background-color: #f0fdf4;';
+                isInfo = false;
+                countSukses++;
+            } else if (restOfText.includes('[GAGAL]')) {
+                statusHtml = '<span style="background:#fee2e2; color:#991b1b; padding:2px 6px; border-radius:4px; font-weight:bold;">GAGAL</span>';
+                bgRow = 'background-color: #fef2f2;';
+                isInfo = false;
+                countGagal++;
+            } else if (restOfText.includes('[LEWAT]') || restOfText.includes('[SKIP]')) {
+                statusHtml = '<span style="background:#fef9c3; color:#854d0e; padding:2px 6px; border-radius:4px; font-weight:bold;">SKIP</span>';
+                bgRow = 'background-color: #fffbeb;';
+                isInfo = false;
+                countSkip++;
+            } else if (restOfText.includes('[PROSES]')) {
+                statusHtml = '<span style="background:#dbeafe; color:#1e40af; padding:2px 6px; border-radius:4px; font-weight:bold;">PROSES</span>';
+                isInfo = false;
+            }
+            
+            if (!isInfo) {
+                const logLine2 = document.createElement('tr');
+                let noFaktur = '-';
+                const fakturMatch = restOfText.match(/Faktur (\d+)/i);
+                if (fakturMatch) {
+                    noFaktur = fakturMatch[1];
+                }
+                
+                if (bgRow) logLine2.style = bgRow;
+                
+                logLine2.innerHTML = `
+                    <td style="padding: 6px; border-bottom: 1px solid var(--border-color); white-space: nowrap;">${waktu}</td>
+                    <td style="padding: 6px; border-bottom: 1px solid var(--border-color); font-family: monospace;">${noFaktur}</td>
+                    <td style="padding: 6px; border-bottom: 1px solid var(--border-color);">${statusHtml}</td>
+                    <td style="padding: 6px; border-bottom: 1px solid var(--border-color);">${restOfText}</td>
+                `;
+                fragment2.appendChild(logLine2);
+            }
         });
-        statusLog.appendChild(fragment);
+        if (statusLog1) statusLog1.appendChild(fragment1);
+        if (statusLog2) statusLog2.appendChild(fragment2);
+        
+        // Update stats UI
+        const statSukses = document.getElementById('stat-sukses');
+        const statGagal = document.getElementById('stat-gagal');
+        const statSkip = document.getElementById('stat-skip');
+        const statDurasi = document.getElementById('stat-durasi');
+        if(statSukses) statSukses.textContent = countSukses;
+        if(statGagal) statGagal.textContent = countGagal;
+        if(statSkip) statSkip.textContent = countSkip;
+        if(statDurasi && firstLogTime && lastLogTime) {
+            let diffSec = Math.floor((lastLogTime - firstLogTime) / 1000);
+            if(diffSec < 0) diffSec = 0;
+            const m = Math.floor(diffSec / 60).toString().padStart(2, '0');
+            const s = (diffSec % 60).toString().padStart(2, '0');
+            statDurasi.textContent = `${m}:${s}`;
+        }
     }
 
-    statusLog.scrollTop = statusLog.scrollHeight; // Scroll to bottom for new logs
+    if (statusLog1) statusLog1.scrollTop = statusLog1.scrollHeight;
+    // For table, we scroll the parent container
+    if (statusLog2 && statusLog2.parentElement && statusLog2.parentElement.parentElement) {
+        statusLog2.parentElement.parentElement.scrollTop = statusLog2.parentElement.parentElement.scrollHeight;
+    }
 };
 
 const updateAndSaveStatus = (message) => {
@@ -432,6 +533,16 @@ function addEventListeners() {
 
     if (clearLogBtn) {
         clearLogBtn.addEventListener('click', handleClearLog);
+    }
+    
+    const btnExportCSV = document.getElementById('btnExportCSV');
+    if (btnExportCSV) {
+        btnExportCSV.addEventListener('click', handleExportCSV);
+    }
+    
+    const btnHapusLogFitur = document.getElementById('btnHapusLogFitur');
+    if (btnHapusLogFitur) {
+        btnHapusLogFitur.addEventListener('click', handleClearLog);
     }
 
     if (downloadTemplateLink) {
@@ -1264,6 +1375,53 @@ function handleClearLog(event) {
     });
 }
 
+function handleExportCSV(event) {
+    if (event) event.preventDefault();
+    chrome.storage.local.get({ efakturLogs: [] }, (result) => {
+        const logs = result.efakturLogs || [];
+        if (logs.length === 0) {
+            showToast('Tidak ada log untuk diexport', 'error');
+            return;
+        }
+
+        let csvContent = 'Waktu,No. Faktur,Status,Keterangan\n';
+        
+        logs.forEach(entry => {
+            const safeText = sanitizeLogMessage(typeof entry === 'string' ? entry : String(entry ?? ''));
+            const timeMatch = safeText.match(/^\[(.*?)\]\s*(.*)/);
+            const waktu = timeMatch ? timeMatch[1] : '';
+            const restOfText = timeMatch ? timeMatch[2] : safeText;
+            
+            let status = 'INFO';
+            if (restOfText.includes('[BERHASIL]')) status = 'SUKSES';
+            else if (restOfText.includes('[GAGAL]')) status = 'GAGAL';
+            else if (restOfText.includes('[LEWAT]')) status = 'SKIP';
+            else if (restOfText.includes('[PROSES]')) status = 'PROSES';
+            
+            let noFaktur = '-';
+            const fakturMatch = restOfText.match(/Faktur (\d+)/i);
+            if (fakturMatch) {
+                noFaktur = fakturMatch[1];
+            }
+            
+            const escapeCSV = (str) => `"${str.replace(/"/g, '""')}"`;
+            
+            csvContent += `${escapeCSV(waktu)},${escapeCSV(noFaktur)},${escapeCSV(status)},${escapeCSV(restOfText)}\n`;
+        });
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        const dateStr = new Date().toISOString().slice(0, 10);
+        link.setAttribute("href", url);
+        link.setAttribute("download", `log_efaktur_${dateStr}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    });
+}
+
 function handleDownloadTemplate(event) {
     event.preventDefault();
 
@@ -1289,7 +1447,7 @@ function handleDownloadTemplate(event) {
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.setAttribute("href", url);
-        link.setAttribute("download", "template_efaktur_automation.csv");
+        link.setAttribute("download", "template_efaktur_otomatis.csv");
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -1718,14 +1876,50 @@ function initPdfMasukanDownload() {
 function initPreflightChecklist() {
     const checks = document.querySelectorAll('.preflight-check');
     const card = document.getElementById('preflight-checklist');
-    if (!card || checks.length === 0) return;
-
+    if (!card || checks.length < 3) return;
+    
+    // Disable manual clicking
     checks.forEach(check => {
-        check.addEventListener('change', () => {
-            const allChecked = Array.from(checks).every(c => c.checked);
-            card.classList.toggle('preflight-ready', allChecked);
-        });
+        check.style.pointerEvents = 'none';
     });
+    
+    const checkStatus = () => {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            const activeTab = tabs[0];
+            if (!activeTab || !activeTab.url) return;
+            
+            // Check 1: Coretax terbuka
+            const isCoretax = activeTab.url.includes('coretaxdjp.pajak.go.id');
+            checks[0].checked = isCoretax;
+            
+            if (isCoretax) {
+                // Check 2 and 3 via content_script
+                chrome.tabs.sendMessage(activeTab.id, { type: 'CHECK_READY' }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        checks[1].checked = false;
+                        checks[2].checked = false;
+                    } else if (response) {
+                        checks[1].checked = !!response.isPajakMasukan;
+                        checks[2].checked = !!response.isNoStatusFilter;
+                    }
+                    updateCardState();
+                });
+            } else {
+                checks[1].checked = false;
+                checks[2].checked = false;
+                updateCardState();
+            }
+        });
+    };
+    
+    const updateCardState = () => {
+        const allChecked = Array.from(checks).every(c => c.checked);
+        card.classList.toggle('preflight-ready', allChecked);
+    };
+
+    // Auto check every 2 seconds
+    checkStatus();
+    setInterval(checkStatus, 2000);
 }
 
 function initThemeToggle() {

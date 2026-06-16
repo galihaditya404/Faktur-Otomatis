@@ -1009,7 +1009,7 @@ function addFakturResult(nomorFaktur, status, errorMessage = null, metadata = {}
         'PENDING': 0,
         'NOT_PROCESSED': 1,
         'SKIPPED': 2,
-        'NOT_FOUND': 3,
+        'SKIPPED': 3,
         'FAILED': 4,
         'SUCCESS': 5
     };
@@ -1178,7 +1178,7 @@ function generateFakturSummary() {
         total: fakturProcessingResults.length,
         success: fakturProcessingResults.filter(r => r.status === 'SUCCESS').length,
         failed: fakturProcessingResults.filter(r => r.status === 'FAILED').length,
-        notFound: fakturProcessingResults.filter(r => r.status === 'NOT_FOUND').length,
+        notFound: fakturProcessingResults.filter(r => r.status === 'SKIPPED').length,
         skipped: fakturProcessingResults.filter(r => r.status === 'SKIPPED').length,
         notProcessed: fakturProcessingResults.filter(r => r.status === 'NOT_PROCESSED').length,
         pending: fakturProcessingResults.filter(r => r.status === 'PENDING').length
@@ -1221,7 +1221,7 @@ function generateFakturSummary() {
         const statusIcon = {
             'SUCCESS': '',
             'FAILED': '',
-            'NOT_FOUND': '',
+            'SKIPPED': '',
             'SKIPPED': '',
             'NOT_PROCESSED': '',
             'PENDING': ''
@@ -1384,7 +1384,26 @@ function cleanupMessageTracking() {
 function updateStatus(message, statusType = 'status', invoicesProcessed = 0, isFinalCompletion = false, currentQuotaUsed = 0, totalQuota = 0) {
     updateSessionActivity('status-update');
     const now = Date.now();
-    const safeMessage = sanitizeLogMessage(typeof message === 'string' ? message : String(message ?? ''));
+    let safeMessage = sanitizeLogMessage(typeof message === 'string' ? message : String(message ?? ''));
+    
+    // Simplifikasi log untuk user akuntansi/pajak
+    if (safeMessage.includes('Mensimulasikan klik pada tombol')) {
+        safeMessage = `[PROSES] Menyetujui faktur...`;
+    } else if (safeMessage.includes('Filter tahun berhasil diatur ke')) {
+        safeMessage = `[PROSES] Mengatur tahun faktur...`;
+    } else if (safeMessage.includes('Mencari input') || safeMessage.includes('Memastikan filter') || safeMessage.includes('Menunggu elemen')) {
+        // Abaikan log teknis yang terlalu detail
+        return;
+    } else if (safeMessage.includes('SUKSES memproses faktur')) {
+        const match = safeMessage.match(/faktur (\d+)/);
+        const fakturNum = match ? match[1] : '';
+        safeMessage = `✅ [BERHASIL] Faktur ${fakturNum} sukses diproses.`;
+    } else if (safeMessage.includes('GAGAL memproses faktur')) {
+        const match = safeMessage.match(/faktur (\d+)/);
+        const fakturNum = match ? match[1] : '';
+        safeMessage = `❌ [GAGAL] Faktur ${fakturNum} gagal diproses.`;
+    }
+
     const messageKey = `${statusType}_${safeMessage}`;
 
     //  DEDUPLICATION: Cek apakah pesan yang sama sudah dikirim dalam 1000ms terakhir
@@ -1394,7 +1413,6 @@ function updateStatus(message, statusType = 'status', invoicesProcessed = 0, isF
         now - lastTime < 1000 &&
         lastContent === safeMessage) {
         // Skip duplicate message dalam waktu 1 detik
-        console.log(`Content script: [DEDUPLICATION] Skipping duplicate message: ${safeMessage.substring(0, 50)}...`);
         return;
     }
 
@@ -3857,15 +3875,28 @@ async function klikTombolFinal(teksTombol) {
         return false;
     }
 
+    const targetAksi = teksTombol.trim().toLowerCase();
+
     // Attempt to find by aria-label first, then by exact text match
     let button = await waitForElement(`button[aria-label="${ariaLabel}"]`, 2000);
     if (!button) {
         // Fallback: search all buttons for the exact text (e.g. "Kreditkan") or ariaLabel
         const buttons = document.querySelectorAll('button');
         button = Array.from(buttons).find(btn => {
-            const textMatch = btn.textContent && btn.textContent.trim().toLowerCase() === teksTombol.toLowerCase();
-            const ariaMatch = btn.getAttribute('aria-label') && btn.getAttribute('aria-label').toLowerCase().includes(ariaLabel.toLowerCase());
-            const titleMatch = btn.getAttribute('title') && btn.getAttribute('title').toLowerCase().includes(teksTombol.toLowerCase());
+            const btnText = btn.textContent ? btn.textContent.trim().toLowerCase() : '';
+            const btnAria = btn.getAttribute('aria-label') ? btn.getAttribute('aria-label').toLowerCase() : '';
+            const btnTitle = btn.getAttribute('title') ? btn.getAttribute('title').toLowerCase() : '';
+            
+            // Allow partial matching
+            let textMatch = btnText === targetAksi;
+            if (targetAksi === 'kreditkan') {
+                textMatch = textMatch || btnText.includes('kreditkan') || btnText === 'credit';
+            } else if (targetAksi === 'tidak dikreditkan') {
+                textMatch = textMatch || btnText.includes('tidak dikreditkan') || btnText === 'uncredit';
+            }
+            
+            const ariaMatch = btnAria.includes(ariaLabel.toLowerCase());
+            const titleMatch = btnTitle.includes(targetAksi);
             return textMatch || ariaMatch || titleMatch;
         });
     }
@@ -4495,11 +4526,11 @@ async function prosesSatuFaktur(faktur, bulan, tahun, aksi) {
 
     // Validation: Check if we have any rows after filtering
     if (allRows.length === 0) {
-        updateStatus(` TIDAK ADA HASIL FILTER: Faktur ${faktur} tidak ditemukan setelah filter diterapkan.`, 'error');
+        updateStatus(`  -> [SKIP] Faktur ${faktur} tidak ditemukan setelah filter diterapkan.`, 'status');
         console.error("Content script: No rows found after invoice filter - filter may have failed");
         //  FAKTUR TRACKING: Track not found result
-        addFakturResult(faktur, 'NOT_FOUND', 'Tidak ditemukan setelah filter diterapkan');
-        return "NOT_FOUND";
+        addFakturResult(faktur, 'SKIPPED', 'Tidak ditemukan setelah filter diterapkan');
+        return "SKIPPED";
     }
 
     //  ENHANCED ROW SEARCH: Check all rows until we find the correct invoice
@@ -4523,11 +4554,11 @@ async function prosesSatuFaktur(faktur, bulan, tahun, aksi) {
 
     // If we still haven't found the invoice, return NOT_FOUND
     if (!targetRow) {
-        updateStatus(` Faktur ${faktur} tidak ditemukan di row manapun setelah filter diterapkan.`, 'error');
+        updateStatus(`  -> [SKIP] Faktur ${faktur} tidak ditemukan di row manapun.`, 'status');
         console.error(`Content script: Invoice ${faktur} not found in any of the ${allRows.length} filtered rows`);
         //  FAKTUR TRACKING: Track not found result
-        addFakturResult(faktur, 'NOT_FOUND', 'Tidak ditemukan di filtered rows');
-        return "NOT_FOUND";
+        addFakturResult(faktur, 'SKIPPED', 'Tidak ditemukan di filtered rows');
+        return "SKIPPED";
     }
 
     updateStatus(`  -> DITEMUKAN: Faktur ${faktur} di hasil filter.`);
@@ -5419,7 +5450,7 @@ async function startAutomation() {
         const notProcessedCount = fakturProcessingResults.filter(entry => entry.status === 'NOT_PROCESSED').length;
         const pendingCount = fakturProcessingResults.filter(entry => entry.status === 'PENDING').length;
         const failedCount = fakturProcessingResults.filter(entry => entry.status === 'FAILED').length;
-        const notFoundCount = fakturProcessingResults.filter(entry => entry.status === 'NOT_FOUND').length;
+        const notFoundCount = fakturProcessingResults.filter(entry => entry.status === 'SKIPPED').length;
         const skippedCount = fakturProcessingResults.filter(entry => entry.status === 'SKIPPED').length;
 
         // Always send a SINGLE final status message
@@ -5518,7 +5549,9 @@ async function startAutomation() {
                 : null;
 
             let targetMonthName = "ALL";
-            if (masaDetails?.label) {
+            if (automationData.bulanDipilih && automationData.bulanDipilih !== "") {
+                targetMonthName = automationData.bulanDipilih;
+            } else if (masaDetails?.label) {
                 targetMonthName = masaDetails.label;
             }
             processedInvoices++;
@@ -6011,7 +6044,7 @@ async function startAutomation() {
                             break;
                         }
                     }
-                } else if (hasilProsesPertama === "NOT_FOUND") {
+                } else if (hasilProsesPertama === "SKIPPED") {
                     // RETRY DENGAN TAHUN ALTERNATIF: Jika faktur tidak ditemukan di tahun awal, coba cari di tahun lainnya
                     const initialYear = automationData.tahunDipilih || "2025";
                     const alternateYear = initialYear === "2026" ? "2025" : "2026";
@@ -6045,8 +6078,8 @@ async function startAutomation() {
                                 updateStatus(`  ->  SUKSES memproses faktur ${faktur} dengan tahun ${alternateYear}. Progress: ${totalBerhasil}/${processedInvoices}`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
                                 console.log(`Content script:  FIRST INVOICE SUCCESS with year ${alternateYear}: ${faktur}`);
                                 logAutomationStep("First invoice success with alternate year", { faktur, alternateYear });
-                            } else if (hasilRetryAlternate === "NOT_FOUND") {
-                                updateStatus(`  ->  Faktur ${faktur} tidak ditemukan di tahun ${initialYear} maupun ${alternateYear}, skip.`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
+                            } else if (hasilRetryAlternate === "SKIPPED") {
+                                updateStatus(`  -> [SKIP] Faktur ${faktur} tidak ditemukan di tahun ${initialYear} maupun ${alternateYear}, skip.`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
                                 console.log(`Content script:  FIRST INVOICE SKIPPED: ${faktur} not found in ${initialYear} or ${alternateYear}`);
                                 delete badGatewayRetryTracker[faktur];
                                 logAutomationStep("First invoice not found in both years", { faktur, initialYear, alternateYear });
@@ -6061,13 +6094,13 @@ async function startAutomation() {
                             await filterTahunPajakHeader(initialYear);
                         } else {
                             // Jika gagal set filter tahun alternatif, skip saja
-                            updateStatus(`  ->  Faktur ${faktur} tidak ditemukan, skip.`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
+                            updateStatus(`  -> [SKIP] Faktur ${faktur} tidak ditemukan, skip.`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
                             console.log(`Content script:  FIRST INVOICE SKIPPED: ${faktur} not found (failed to set year ${alternateYear} filter)`);
                             delete badGatewayRetryTracker[faktur];
                         }
                     } catch (retryError) {
                         console.warn(`Content script: Error during year ${alternateYear} retry:`, retryError);
-                        updateStatus(`  ->  Faktur ${faktur} tidak ditemukan, skip.`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
+                        updateStatus(`  -> [SKIP] Faktur ${faktur} tidak ditemukan, skip.`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
                         console.log(`Content script:  FIRST INVOICE SKIPPED: ${faktur} not found`);
                         delete badGatewayRetryTracker[faktur];
                         logAutomationStep("Alternate year retry error", { faktur, alternateYear, error: retryError.message });
@@ -6175,7 +6208,7 @@ async function startAutomation() {
             console.log("Content script: Setting year filter to 2025...");
             updateStatus("  -> Memastikan filter tahun di-set ke 2025...");
             try {
-                const filterTahunOk = await filterTahunPajakHeader("2025");
+                const filterTahunOk = await filterTahunPajakHeader(automationData.tahunDipilih || "2025");
                 if (filterTahunOk) {
                     console.log("Content script:  Year filter 2025 confirmed");
                     await new Promise(resolve => setTimeout(resolve, 500));
@@ -6286,7 +6319,7 @@ async function startAutomation() {
                         break; // Exit the main processing loop
                     }
                 }
-            } else if (hasil === "NOT_FOUND") {
+            } else if (hasil === "SKIPPED") {
                 // RETRY DENGAN TAHUN 2026: Untuk subsequent invoices, filter SELALU dimulai dengan 2025, jadi retry SELALU dengan 2026
                 console.log(`Content script: Invoice ${faktur} not found with year 2025, trying year 2026...`);
                 updateStatus(`  ->  Faktur ${faktur} tidak ditemukan di tahun 2025, mencoba tahun 2026...`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
@@ -6294,7 +6327,7 @@ async function startAutomation() {
 
                 try {
                     // Set filter tahun ke 2026
-                    const filterTahun2026Berhasil = await filterTahunPajakHeader("2026");
+                    const filterTahun2026Berhasil = await filterTahunPajakHeader(alternateYear);
 
                     if (filterTahun2026Berhasil) {
                         console.log("Content script: Year filter set to 2026 for retry");
@@ -6307,14 +6340,14 @@ async function startAutomation() {
                         await retryOperation(() => filterNomorFaktur(faktur), 2, 2000);
 
                         // Retry proses faktur dengan tahun 2026
-                        const hasilRetry2026 = await prosesSatuFaktur(faktur, automationData.bulanDipilih, automationData.tahunDipilih, automationData.aksiFinal);
+                        const hasilRetry2026 = await prosesSatuFaktur(faktur, automationData.bulanDipilih, alternateYear, automationData.aksiFinal);
 
                         if (hasilRetry2026 === "SUCCESS") {
                             totalBerhasil++;
                             processedSuccessCount++;
-                            updateStatus(`  ->  SUKSES memproses faktur ${faktur} dengan tahun 2026. Progress: ${totalBerhasil}/${processedInvoices}`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
-                            console.log(`Content script:  SUCCESS with year 2026: ${faktur}`);
-                            logAutomationStep("Invoice success with year 2026", { faktur });
+                            updateStatus(`  ->  SUKSES memproses faktur ${faktur} dengan tahun ${alternateYear}. Progress: ${totalBerhasil}/${processedInvoices}`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
+                            console.log(`Content script:  SUCCESS with year ${alternateYear}: ${faktur}`);
+                            logAutomationStep("Invoice success with alternate year", { faktur });
 
                             //  QUOTA FIX: Check quota limit after success with 2026
                             if (quotaInfo && quotaInfo.isFreeUser) {
@@ -6333,43 +6366,43 @@ async function startAutomation() {
                                     currentState = MachineState.STOPPED;
                                     await finalizeAutomation(MachineState.STOPPED, totalBerhasil, fakturList.length);
                                     // Reset filter tahun ke 2025 sebelum exit
-                                    try { await filterTahunPajakHeader("2025"); } catch (e) { /* ignore */ }
+                                    try { await filterTahunPajakHeader(automationData.tahunDipilih || "2025"); } catch (e) { /* ignore */ }
                                     break;
                                 }
                             }
-                        } else if (hasilRetry2026 === "NOT_FOUND") {
-                            updateStatus(`  ->  Faktur ${faktur} tidak ditemukan di tahun 2025 maupun 2026, skip.`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
-                            console.log(`Content script:  SKIPPED: ${faktur} not found in 2025 or 2026`);
+                        } else if (hasilRetry2026 === "SKIPPED") {
+                            updateStatus(`  -> [SKIP] Faktur ${faktur} tidak ditemukan di tahun ${initialYear} maupun ${alternateYear}, skip.`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
+                            console.log(`Content script:  SKIPPED: ${faktur} not found in ${initialYear} or ${alternateYear}`);
                             logAutomationStep("Invoice not found in both years", { faktur });
                         } else {
-                            updateStatus(`  ->  GAGAL memproses faktur ${faktur} dengan tahun 2026.`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
-                            console.log(`Content script:  FAILED with year 2026: ${faktur}`);
+                            updateStatus(`  ->  GAGAL memproses faktur ${faktur} dengan tahun ${alternateYear}.`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
+                            console.log(`Content script:  FAILED with year ${alternateYear}: ${faktur}`);
                             logAutomationStep("Invoice failed with year 2026", { faktur });
                         }
 
                         // Reset filter tahun kembali ke 2025 untuk faktur berikutnya
                         console.log("Content script: Resetting year filter back to 2025 for next invoice...");
                         try {
-                            await filterTahunPajakHeader("2025");
+                            await filterTahunPajakHeader(automationData.tahunDipilih || "2025");
                         } catch (resetError) {
                             console.warn("Content script: Failed to reset year filter to 2025:", resetError);
                         }
                     } else {
                         // Jika gagal set filter tahun 2026, skip saja
-                        updateStatus(`  ->  Faktur ${faktur} tidak ditemukan, skip (gagal set filter 2026).`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
+                        updateStatus(`  -> [SKIP] Faktur ${faktur} tidak ditemukan, skip.`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
                         console.log(`Content script:  SKIPPED: ${faktur} not found (failed to set year 2026 filter)`);
-                        logAutomationStep("Year 2026 filter failed", { faktur });
+                        logAutomationStep("Alternate year filter failed", { faktur });
                     }
                 } catch (retryError) {
                     if (retryError instanceof SessionLogoutError) { throw retryError; }
                     console.warn("Content script: Error during year 2026 retry:", retryError);
-                    updateStatus(`  ->  Faktur ${faktur} tidak ditemukan, skip.`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
+                    updateStatus(`  -> [SKIP] Faktur ${faktur} tidak ditemukan, skip.`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
                     console.log(`Content script:  SKIPPED: ${faktur} not found (year 2026 retry error)`);
                     logAutomationStep("Year 2026 retry error", { faktur, error: retryError.message });
 
                     // Reset filter tahun ke 2025 untuk faktur berikutnya
                     try {
-                        await filterTahunPajakHeader("2025");
+                        await filterTahunPajakHeader(automationData.tahunDipilih || "2025");
                     } catch (e) { /* ignore */ }
                 }
 
@@ -6565,7 +6598,7 @@ async function startAutomation() {
             console.log("Content script:  ENSURING year filter is set to 2025 before processing...");
             updateStatus("  -> Memastikan filter tahun di-set ke 2025...");
             try {
-                const filterTahunOk = await filterTahunPajakHeader("2025");
+                const filterTahunOk = await filterTahunPajakHeader(automationData.tahunDipilih || "2025");
                 if (filterTahunOk) {
                     console.log("Content script:  Year filter 2025 confirmed for subsequent invoice");
                     await new Promise(resolve => setTimeout(resolve, 500)); // Wait for filter to apply
@@ -6674,7 +6707,7 @@ async function startAutomation() {
                         break;
                     }
                 }
-            } else if (hasilProses === "NOT_FOUND") {
+            } else if (hasilProses === "SKIPPED") {
                 // RETRY DENGAN TAHUN 2026: Jika faktur tidak ditemukan di tahun 2025, coba cari di tahun 2026
                 console.log(`Content script: Invoice ${faktur} not found with year 2025, trying year 2026...`);
                 updateStatus(`  ->  Faktur ${faktur} tidak ditemukan di tahun 2025, mencoba tahun 2026...`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
@@ -6682,7 +6715,7 @@ async function startAutomation() {
 
                 try {
                     // Set filter tahun ke 2026
-                    const filterTahun2026Berhasil = await filterTahunPajakHeader("2026");
+                    const filterTahun2026Berhasil = await filterTahunPajakHeader(alternateYear);
 
                     if (filterTahun2026Berhasil) {
                         console.log("Content script: Year filter set to 2026 for retry");
@@ -6695,44 +6728,44 @@ async function startAutomation() {
                         await retryOperation(() => filterNomorFaktur(faktur), 2, 2000);
 
                         // Retry proses faktur
-                        const hasilRetry2026 = await prosesSatuFaktur(faktur, automationData.bulanDipilih, automationData.tahunDipilih, automationData.aksiFinal);
+                        const hasilRetry2026 = await prosesSatuFaktur(faktur, automationData.bulanDipilih, alternateYear, automationData.aksiFinal);
 
                         if (hasilRetry2026 === "SUCCESS") {
                             totalBerhasil++;
                             processedSuccessCount++;
-                            updateStatus(`  ->  SUKSES memproses faktur ${faktur} dengan tahun 2026. Progress: ${totalBerhasil}/${processedInvoices}`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
-                            console.log(`Content script:  SUCCESS with year 2026: ${faktur}`);
-                            logAutomationStep("Invoice success with year 2026", { faktur, iteration: i + 1 });
+                            updateStatus(`  ->  SUKSES memproses faktur ${faktur} dengan tahun ${alternateYear}. Progress: ${totalBerhasil}/${processedInvoices}`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
+                            console.log(`Content script:  SUCCESS with year ${alternateYear}: ${faktur}`);
+                            logAutomationStep("Invoice success with alternate year", { faktur, iteration: i + 1 });
 
                             // Reset filter tahun kembali ke 2025 untuk faktur berikutnya
                             console.log("Content script: Resetting year filter back to 2025 for next invoice...");
-                            await filterTahunPajakHeader("2025");
-                        } else if (hasilRetry2026 === "NOT_FOUND") {
-                            updateStatus(`  ->  Faktur ${faktur} tidak ditemukan di tahun 2025 maupun 2026, skip.`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
-                            console.log(`Content script:  SKIPPED: ${faktur} not found after checking 2025 and 2026`);
+                            await filterTahunPajakHeader(automationData.tahunDipilih || "2025");
+                        } else if (hasilRetry2026 === "SKIPPED") {
+                            updateStatus(`  -> [SKIP] Faktur ${faktur} tidak ditemukan di tahun ${initialYear} maupun ${alternateYear}, skip.`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
+                            console.log(`Content script:  SKIPPED: ${faktur} not found after checking ${initialYear} and ${alternateYear}`);
                             logAutomationStep("Invoice not found in 2025/2026", { faktur, iteration: i + 1 });
                         } else {
-                            updateStatus(`  ->  GAGAL memproses faktur ${faktur} dengan tahun 2026.`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
-                            console.log(`Content script:  FAILED with year 2026: ${faktur}`);
+                            updateStatus(`  ->  GAGAL memproses faktur ${faktur} dengan tahun ${alternateYear}.`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
+                            console.log(`Content script:  FAILED with year ${alternateYear}: ${faktur}`);
 
                             // Reset filter tahun kembali ke 2025 untuk faktur berikutnya
                             console.log("Content script: Resetting year filter back to 2025 for next invoice...");
-                            await filterTahunPajakHeader("2025");
+                            await filterTahunPajakHeader(automationData.tahunDipilih || "2025");
                         }
                     } else {
                         // Jika gagal set filter tahun 2026, skip saja
-                        updateStatus(`  ->  Faktur ${faktur} tidak ditemukan, skip.`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
+                        updateStatus(`  -> [SKIP] Faktur ${faktur} tidak ditemukan, skip.`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
                         console.log(`Content script:  SKIPPED: ${faktur} not found (failed to set year 2026 filter)`);
                     }
                 } catch (retryError) {
                     console.warn("Content script: Error during year retry:", retryError);
-                    updateStatus(`  ->  Faktur ${faktur} tidak ditemukan, skip.`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
+                    updateStatus(`  -> [SKIP] Faktur ${faktur} tidak ditemukan, skip.`, 'status', totalBerhasil, false, totalBerhasil, fakturList.length);
                     console.log(`Content script:  SKIPPED: ${faktur} not found`);
                     logAutomationStep("Year retry error for subsequent invoice", { faktur, error: retryError.message });
 
                     // Reset filter tahun ke 2025 untuk faktur berikutnya
                     try {
-                        await filterTahunPajakHeader("2025");
+                        await filterTahunPajakHeader(automationData.tahunDipilih || "2025");
                     } catch (e) { /* ignore */ }
                 }
             } else {
@@ -7291,7 +7324,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     switch (message.type) {
         case 'CHECK_READY':
             console.log("Content script: CHECK_READY received. Sending response: READY");
-            sendResponse({ success: true, status: 'READY' });
+            const isPajakMasukan = document.title.toLowerCase().includes('masukan') || document.body.innerText.toLowerCase().includes('pajak masukan');
+            const badgeElements = Array.from(document.querySelectorAll('.p-badge'));
+            const statusBadge = badgeElements.find(badge => badge.textContent.trim().toLowerCase() === 'status');
+            sendResponse({ 
+                success: true, 
+                status: 'READY',
+                isPajakMasukan: isPajakMasukan,
+                isNoStatusFilter: !statusBadge
+            });
             break;
 
         case 'START_AUTOMATION':

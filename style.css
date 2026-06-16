@@ -50,7 +50,7 @@ body.dark-mode {
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    width: 380px;
+    width: 100%; min-width: 380px;
     margin: 0;
     padding: 0;
     background: var(--bg-base);
