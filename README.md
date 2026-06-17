@@ -1,6 +1,6 @@
 # Faktur Otomatis
 
-**Version:** 1.1
+**Version:** 1.5
 **Description:** Sat Set, Entry Pajak Anti Lelet.
 
 ## 📋 Profil
